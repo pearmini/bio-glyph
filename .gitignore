@@ -1,45 +1,16 @@
+# macOS
 .DS_Store
-.AppleDouble
-.LSOverride
-._*
-
-# Editor/IDE
-.vscode/
-.idea/
 
 # Python
 __pycache__/
 *.py[cod]
-*.pyd
-*.so
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-
-# Virtual environments
 .venv/
 venv/
-ENV/
 env/
-
-# Jupyter
 .ipynb_checkpoints/
-
-# Local datasets
-datasets/
-
-# Model binaries
 *.task
 *.tflite
 
-# Build artifacts
-build/
+# JavaScript
+node_modules/
 dist/
-*.egg-info/
-
-# Secrets / env files
-.env
-.env.*
-

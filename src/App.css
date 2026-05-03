@@ -1,0 +1,30 @@
+.compare {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.compare .source {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  height: 100%;
+  object-fit: contain;
+}
+
+.output {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  position: relative;
+  align-self: center;
+  max-height: 100%;
+}
+
+.output canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
