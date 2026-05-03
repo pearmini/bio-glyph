@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BioGlyph</title>
+  </head>
+  <body
+    style="
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    "
+  >
+    <div
+      style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 28px;
+      "
+    >
+      <div>
+        <div style="display: flex; gap: 12px">
+          <img src="./face.jpg" alt="face" style="height: 600px" />
+          <img
+            src="./output.png"
+            alt="output"
+            style="height: 600px; opacity: 0"
+          />
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <input
+          type="text"
+          id="name"
+          placeholder="Enter your name"
+          style="width: 260px; padding: 8px 10px; font-size: 16px"
+        />
+        <button id="generate" style="padding: 10px 14px; font-size: 16px">
+          Generate
+        </button>
+      </div>
+    </div>
+    <script>
+      const button = document.getElementById("generate");
+      button.addEventListener("click", () => {
+        const name = document.getElementById("name").value;
+        if (name) {
+          const output = document.querySelector("img[alt='output']");
+          button.textContent = "Generating...";
+          setTimeout(() => {
+            output.style.opacity = 1;
+            button.textContent = "Generate";
+          }, 1000);
+        }
+      });
+    </script>
+  </body>
+</html>
