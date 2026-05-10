@@ -528,7 +528,7 @@ export default function App() {
                   />
                 </div>
                 <p className="stage__tip">Place your face in the circle</p>
-                <button type="button" className="btn btn--primary" onClick={() => void generate()}>
+                <button type="button" className="btn btn--dark" onClick={() => void generate()}>
                   Generate
                 </button>
               </div>
@@ -547,7 +547,7 @@ export default function App() {
                 />
               ) : null}
             </div>
-            <button type="button" className="btn btn--primary btn--busy" disabled>
+            <button type="button" className="btn btn--dark btn--busy" disabled>
               Generate
             </button>
           </div>

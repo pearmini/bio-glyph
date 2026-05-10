@@ -301,6 +301,29 @@
   background: #1565c0;
 }
 
+.btn--dark {
+  border-color: #141414;
+  background: #141414;
+  color: #fff;
+}
+
+.btn--dark:hover:not(:disabled) {
+  background: #2a2a2a;
+  border-color: #2a2a2a;
+}
+
+.btn--dark:disabled,
+.btn--dark.btn--busy:disabled {
+  background: #141414;
+  border-color: #141414;
+  color: #fff;
+}
+
+.btn--dark:disabled:hover,
+.btn--dark.btn--busy:disabled:hover {
+  background: #141414;
+}
+
 .btn:disabled,
 .btn--busy:disabled {
   cursor: not-allowed;
