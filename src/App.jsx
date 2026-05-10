@@ -9,6 +9,7 @@ import "./App.css";
 import { Maximize2, X } from "lucide-react";
 import QRCode from "qrcode";
 import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
+import { addGeneration, loadGenerations, pathToBubbleSvg } from "./generationStorage.js";
 
 const VIDEO_CONSTRAINTS = {
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -22,12 +23,97 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed) {
+  return function next() {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Layout: top and bottom bands with a flex spacer for the camera column. Bubble
+ * positions are percentages within each band so large discs stay in the margins.
+ */
+function bubbleLayoutForId(id) {
+  const rng = mulberry32(hashString(id));
+  const topBand = rng() < 0.5;
+  const cx = 8 + rng() * 84;
+  const cy = 18 + rng() * 64;
+  const sizePx = 100 + Math.floor(rng() * 92);
+
+  let d1x = -20 - rng() * 30;
+  let d1y = -14 - rng() * 24;
+  let d2x = 18 + rng() * 28;
+  let d2y = -12 - rng() * 22;
+  if (!topBand) {
+    d1x = -22 - rng() * 28;
+    d1y = 12 + rng() * 26;
+    d2x = 16 + rng() * 30;
+    d2y = 10 + rng() * 24;
+  }
+
+  const duration = 19 + rng() * 16;
+  const delay = -rng() * duration;
+  return {
+    topBand,
+    anchor: {
+      left: `${cx}%`,
+      top: `${cy}%`,
+    },
+    disc: {
+      width: sizePx,
+      height: sizePx,
+      "--bubble-d1x": `${d1x}px`,
+      "--bubble-d1y": `${d1y}px`,
+      "--bubble-d2x": `${d2x}px`,
+      "--bubble-d2y": `${d2y}px`,
+      animationDuration: `${duration}s`,
+      animationDelay: `${delay}s`,
+    },
+  };
+}
+
 function getActiveFullscreenElement() {
   return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
 }
 
 const LITTERBOX_UPLOAD =
   "https://litterbox.catbox.moe/resources/internals/api.php";
+
+/** Renders a saved glyph in a bubble from stored path only (no raster thumbnail). */
+function HistoryBubbleFace({ path }) {
+  const { viewBox, d, strokeWidth } = pathToBubbleSvg(path);
+  return (
+    <svg
+      className="history-bubble__svg"
+      viewBox={viewBox}
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden
+    >
+      {d ? (
+        <path
+          d={d}
+          fill="none"
+          stroke="#141414"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+    </svg>
+  );
+}
 
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
 /** @typedef {"idle" | "uploading" | "ready" | "error"} SharePhase */
@@ -55,6 +141,7 @@ export default function App() {
   const [generatingFrameUrl, setGeneratingFrameUrl] = useState(null);
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
   const [previewSession, setPreviewSession] = useState(0);
+  const [savedGenerations, setSavedGenerations] = useState(() => loadGenerations());
 
   const shareAbortRef = useRef(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -87,20 +174,21 @@ export default function App() {
   const runOnSource = useCallback(
     async (sourceEl) => {
       const overlay = overlayRef.current;
-      if (!sourceEl || !overlay) return false;
+      if (!sourceEl || !overlay) return null;
       syncOverlaySize(sourceEl, overlay, null);
       const extracted = await extractFaceFeaturesFromImage(sourceEl);
       if (extracted.ok) {
         // Keep the original static draw as a fallback/offscreen render,
         // but prefer the path for Fourier animation in the result stage.
         drawOneLineFaceToCanvas(overlay, extracted.features);
-        setResultPath(buildOneLinePath(extracted.features));
+        const path = buildOneLinePath(extracted.features);
+        setResultPath(path);
         setExtractError(null);
-        return true;
+        return path;
       }
       clearOverlay();
       setExtractError(extracted.message);
-      return false;
+      return null;
     },
     [clearOverlay],
   );
@@ -166,9 +254,11 @@ export default function App() {
 
     await delay(GENERATING_HOLD_MS);
 
-    const ok = await runOnSource(canvas);
-    if (ok) {
+    const path = await runOnSource(canvas);
+    if (path) {
       try {
+        addGeneration(path);
+        setSavedGenerations(loadGenerations());
         setGeneratingFrameUrl(null);
         setResultAnimPlaying(true);
         setPhase("result");
@@ -214,6 +304,21 @@ export default function App() {
     setResultAnimPlaying(true);
     setResultReplayKey((n) => n + 1);
   }, []);
+
+  const openSavedGeneration = useCallback(
+    (record) => {
+      if (!record?.path || record.path.length < 2) return;
+      stopStream();
+      setGeneratingFrameUrl(null);
+      setExtractError(null);
+      setCameraError(null);
+      setResultPath(record.path);
+      setResultReplayKey((n) => n + 1);
+      setResultAnimPlaying(true);
+      setPhase("result");
+    },
+    [stopStream],
+  );
 
   const closeShareModal = useCallback(() => {
     shareAbortRef.current?.abort();
@@ -374,20 +479,60 @@ export default function App() {
         )}
 
         {phase === "preview" && (
-          <div className="stage__column">
-            <div className="circle-viewport">
-              <video
-                ref={videoRef}
-                className="circle-viewport__video"
-                playsInline
-                muted
-                autoPlay
-              />
+          <div className="preview-stage">
+            {savedGenerations.length > 0 ? (
+              <div className="bubble-field" aria-hidden>
+                {(() => {
+                  const rows = savedGenerations.map((g) => ({
+                    g,
+                    layout: bubbleLayoutForId(g.id),
+                  }));
+                  const renderBand = (list) =>
+                    list.map(({ g, layout }) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        className="history-bubble-anchor"
+                        style={layout.anchor}
+                        onClick={() => openSavedGeneration(g)}
+                        aria-label="Open saved generation"
+                      >
+                        <span className="history-bubble" style={layout.disc}>
+                          <HistoryBubbleFace path={g.path} />
+                        </span>
+                      </button>
+                    ));
+                  return (
+                    <>
+                      <div className="bubble-band bubble-band--top">
+                        {renderBand(rows.filter((r) => r.layout.topBand))}
+                      </div>
+                      <div className="bubble-band-spacer" />
+                      <div className="bubble-band bubble-band--bottom">
+                        {renderBand(rows.filter((r) => !r.layout.topBand))}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+            <div className="preview-stage__foreground">
+              <div className="stage__column">
+                <div className="circle-viewport">
+                  <video
+                    ref={videoRef}
+                    className="circle-viewport__video"
+                    playsInline
+                    muted
+                    autoPlay
+                  />
+                </div>
+                <p className="stage__tip">Place your face in the circle</p>
+                <button type="button" className="btn btn--dark" onClick={() => void generate()}>
+                  Generate
+                </button>
+              </div>
             </div>
-            <p className="stage__tip">Place your face in the circle</p>
-            <button type="button" className="btn btn--primary" onClick={() => void generate()}>
-              Generate
-            </button>
           </div>
         )}
 
@@ -402,7 +547,7 @@ export default function App() {
                 />
               ) : null}
             </div>
-            <button type="button" className="btn btn--primary btn--busy" disabled>
+            <button type="button" className="btn btn--dark btn--busy" disabled>
               Generate
             </button>
           </div>
