@@ -6,6 +6,7 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
+import { Maximize2 } from "lucide-react";
 import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
 
 const VIDEO_CONSTRAINTS = {
@@ -13,14 +14,31 @@ const VIDEO_CONSTRAINTS = {
   audio: false,
 };
 
+/** Extra time on the generating screen after capture before analysis runs. */
+const GENERATING_HOLD_MS = 1000;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getActiveFullscreenElement() {
+  return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
+}
+
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
 
 export default function App() {
+  const appRootRef = useRef(null);
   const videoRef = useRef(null);
   const captureCanvasRef = useRef(null);
   const overlayRef = useRef(null);
   const resultCanvasRef = useRef(null);
   const streamRef = useRef(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  /** Fourier result animation: false when finished, true while coeffs are animating. */
+  const [resultAnimPlaying, setResultAnimPlaying] = useState(false);
+  /** Increment to restart the result animation with the same path. */
+  const [resultReplayKey, setResultReplayKey] = useState(0);
 
   /** @type {[AppPhase, React.Dispatch<React.SetStateAction<AppPhase>>]} */
   const [phase, setPhase] = useState("idle");
@@ -93,6 +111,7 @@ export default function App() {
     clearOverlay();
     setGeneratingFrameUrl(null);
     setResultPath(null);
+    setResultReplayKey(0);
     setExtractError(null);
     setCameraError(null);
     setPhase("preview");
@@ -119,11 +138,7 @@ export default function App() {
     canvas.height = vh;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.save();
-    ctx.translate(vw, 0);
-    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, vw, vh);
-    ctx.restore();
 
     let freezeUrl = null;
     try {
@@ -136,10 +151,13 @@ export default function App() {
     setPhase("generating");
     setCameraError(null);
 
+    await delay(GENERATING_HOLD_MS);
+
     const ok = await runOnSource(canvas);
     if (ok) {
       try {
         setGeneratingFrameUrl(null);
+        setResultAnimPlaying(true);
         setPhase("result");
       } catch {
         setGeneratingFrameUrl(null);
@@ -174,15 +192,36 @@ export default function App() {
   }, [phase, previewSession]);
 
   useEffect(() => {
+    if (phase !== "result") setResultAnimPlaying(false);
+  }, [phase]);
+
+  const replayResultAnimation = useCallback(() => {
+    setResultAnimPlaying(true);
+    setResultReplayKey((n) => n + 1);
+  }, []);
+
+  const downloadResultImage = useCallback(() => {
+    const canvas = resultCanvasRef.current;
+    if (!canvas || canvas.width < 1 || canvas.height < 1) return;
+    try {
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `bioglyph-${Date.now()}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, "image/png");
+    } catch {
+      /* tainted canvas or unsupported */
+    }
+  }, []);
+
+  useEffect(() => {
     if (phase !== "result") return;
     const canvas = resultCanvasRef.current;
     if (!canvas || !resultPath || resultPath.length < 2) return;
-
-    const parent = canvas.parentElement;
-    const rect = parent ? parent.getBoundingClientRect() : null;
-    const size = rect ? Math.max(1, Math.floor(Math.min(rect.width, rect.height))) : 512;
-    canvas.width = size;
-    canvas.height = size;
 
     return startFourierOneLineAnimation(canvas, resultPath, {
       samples: 2048,
@@ -191,15 +230,54 @@ export default function App() {
       fadeAlpha: 0.04,
       strokeStyle: "#141414",
       lineWidth: 2.25,
-      coeffsPerSecond: 110,
+      coeffsPerSecond: 82,
       loop: false,
       autoSeam: true,
       seamGapFraction: 0.02,
+      onComplete: () => setResultAnimPlaying(false),
     });
-  }, [phase, resultPath]);
+  }, [phase, resultPath, resultReplayKey]);
+
+  useEffect(() => {
+    const sync = () => {
+      const fs = getActiveFullscreenElement();
+      setIsFullscreen(fs !== null && fs === appRootRef.current);
+    };
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
+  }, []);
+
+  const enterFullscreen = useCallback(async () => {
+    const el = appRootRef.current;
+    if (!el) return;
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } catch {
+      /* blocked or unsupported */
+    }
+  }, []);
 
   return (
-    <div className="app-root">
+    <div ref={appRootRef} className="app-root">
+      <div className="app-top-bar">
+        <span className="app-brand">BioGlyph</span>
+        {!isFullscreen ? (
+          <button
+            type="button"
+            className="app-fullscreen-btn"
+            aria-label="Enter full screen"
+            onClick={() => void enterFullscreen()}
+          >
+            <Maximize2 size={18} strokeWidth={2} aria-hidden />
+          </button>
+        ) : null}
+      </div>
       <main className="stage">
         {phase === "idle" && (
           <button
@@ -219,7 +297,7 @@ export default function App() {
             <div className="circle-viewport">
               <video
                 ref={videoRef}
-                className="circle-viewport__video circle-viewport__video--mirror"
+                className="circle-viewport__video"
                 playsInline
                 muted
                 autoPlay
@@ -233,22 +311,16 @@ export default function App() {
         )}
 
         {phase === "generating" && (
-          <div className="stage__column">
-            <div className="circle-viewport circle-viewport--busy">
+          <div className="stage__column" aria-busy="true">
+            <div className="circle-viewport">
               {generatingFrameUrl ? (
                 <img
                   src={generatingFrameUrl}
                   alt=""
-                  className="circle-viewport__freeze circle-viewport__video--mirror"
+                  className="circle-viewport__freeze"
                 />
               ) : null}
-              <div className="circle-viewport__mask" aria-hidden />
-              <div className="circle-viewport__spinner-wrap" role="status" aria-live="polite">
-                <span className="circle-viewport__spinner" aria-label="Generating outline" />
-                <span className="circle-viewport__spinner-label">Generating…</span>
-              </div>
             </div>
-            <p className="stage__tip stage__tip--muted">This may take a moment</p>
             <button type="button" className="btn btn--primary btn--busy" disabled>
               Generate
             </button>
@@ -260,9 +332,22 @@ export default function App() {
             <div className="circle-viewport circle-viewport--result">
               <canvas ref={resultCanvasRef} className="circle-viewport__result-canvas" aria-label="Fourier animation" />
             </div>
-            <button type="button" className="btn" onClick={() => void retake()}>
-              Retake
-            </button>
+            <div className="stage__result-actions">
+              <button
+                type="button"
+                className="btn"
+                disabled={resultAnimPlaying}
+                onClick={replayResultAnimation}
+              >
+                Replay
+              </button>
+              <button type="button" className="btn" onClick={() => void retake()}>
+                Retake
+              </button>
+              <button type="button" className="btn" onClick={downloadResultImage}>
+                Download
+              </button>
+            </div>
           </div>
         )}
 

@@ -5,6 +5,69 @@
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
+  background-color: #f6f6f6;
+  color-scheme: light;
+}
+
+/* Fullscreen: keep light chrome; browsers often default backdrop to black. */
+.app-root:fullscreen,
+.app-root:-webkit-full-screen {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: #f6f6f6;
+}
+
+.app-root:fullscreen::backdrop,
+.app-root:-webkit-full-screen::backdrop {
+  background-color: #f6f6f6;
+}
+
+.app-top-bar {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  pointer-events: none;
+}
+
+.app-top-bar > * {
+  pointer-events: auto;
+}
+
+.app-brand {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #141414;
+  user-select: none;
+}
+
+.app-fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border-radius: 6px;
+  border: 1px solid #c5c5c5;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.app-fullscreen-btn svg {
+  display: block;
+}
+
+.app-fullscreen-btn:hover {
+  background: #f5f5f5;
+  border-color: #b0b0b0;
 }
 
 .stage {
@@ -22,18 +85,29 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 1.35rem;
   max-width: 100%;
 }
 
 .stage__column--result {
-  gap: 1.25rem;
+  gap: 2.25rem;
 }
 
+.stage__result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+}
+
+/* Capture (camera / generating): square box, circular mask. */
 .circle-viewport {
   position: relative;
-  width: min(72vmin, 420px);
-  height: min(72vmin, 420px);
+  width: min(80vmin, 480px);
+  max-width: 100%;
+  aspect-ratio: 1;
+  height: auto;
   border-radius: 50%;
   overflow: hidden;
   background: #1a1a1a;
@@ -49,47 +123,6 @@
   display: block;
 }
 
-.circle-viewport__mask {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  pointer-events: none;
-}
-
-.circle-viewport__spinner-wrap {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.65rem;
-  pointer-events: none;
-}
-
-.circle-viewport__spinner {
-  box-sizing: border-box;
-  width: 2.5rem;
-  height: 2.5rem;
-  border: 3px solid rgba(255, 255, 255, 0.25);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: circle-viewport-spin 0.75s linear infinite;
-}
-
-.circle-viewport__spinner-label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-}
-
-@keyframes circle-viewport-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .circle-viewport__video {
   width: 100%;
   height: 100%;
@@ -97,12 +130,10 @@
   display: block;
 }
 
-.circle-viewport__video--mirror {
-  transform: scaleX(-1);
-}
-
+/* Fourier output: square with rounded corners (not a circle). */
 .circle-viewport--result {
-  background: #ffffff;
+  background: #f6f6f6;
+  border-radius: 12px;
 }
 
 .circle-viewport__result-canvas {
@@ -119,10 +150,6 @@
   color: #444;
   text-align: center;
   max-width: 18rem;
-}
-
-.stage__tip--muted {
-  color: #666;
 }
 
 /* (Static result image removed; result uses a canvas animation.) */

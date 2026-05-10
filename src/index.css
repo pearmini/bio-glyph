@@ -1,5 +1,6 @@
 :root {
   font-family: system-ui, sans-serif;
+  color-scheme: light;
 }
 
 html,
@@ -7,8 +8,10 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
+  background-color: #f6f6f6;
 }
 
 #root {
   height: 100%;
+  background-color: #f6f6f6;
 }

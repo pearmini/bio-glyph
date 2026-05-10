@@ -14,6 +14,9 @@ function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
 }
 
+/** Matches app chrome (`index.css` / `.app-root`). */
+const CANVAS_BG = "#f6f6f6";
+
 function bboxFromPoints(pts) {
   let minX = Infinity,
     minY = Infinity,
@@ -117,8 +120,9 @@ function computeDFT(P, K) {
   return DFT;
 }
 
-function fitToCanvasTransform(canvas, points, margin = 0.86) {
-  const { width: W, height: H } = canvas;
+function fitToCanvasTransform(width, height, points, margin = 0.86) {
+  const W = width;
+  const H = height;
   const b = bboxFromPoints(points);
   const bw = Math.max(b.maxX - b.minX, 1e-6);
   const bh = Math.max(b.maxY - b.minY, 1e-6);
@@ -160,11 +164,40 @@ function findLargestWrapJumpIndex(pts) {
  *  closeStroke?: boolean,
  *  seamGapFraction?: number,
  *  autoSeam?: boolean,
+ *  onComplete?: () => void,
+ *  devicePixelRatio?: number,
+ *  maxDevicePixelRatio?: number,
  * }} [opts]
  */
 export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return () => {};
+
+  let cancelled = false;
+
+  const maxDpr = clamp(opts.maxDevicePixelRatio ?? 3, 1, 4);
+  const winDpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
+  const dpr = Math.max(1, Math.min(opts.devicePixelRatio ?? winDpr ?? 1, maxDpr));
+
+  let cssW = canvas.clientWidth;
+  let cssH = canvas.clientHeight;
+  if (cssW < 1 || cssH < 1) {
+    const parent = canvas.parentElement;
+    const r = parent?.getBoundingClientRect();
+    if (r && r.width > 0 && r.height > 0) {
+      cssW = Math.max(1, Math.floor(r.width));
+      cssH = Math.max(1, Math.floor(r.height));
+    } else {
+      cssW = Math.max(1, canvas.width);
+      cssH = Math.max(1, canvas.height);
+    }
+  }
+
+  canvas.width = Math.max(1, Math.floor(cssW * dpr));
+  canvas.height = Math.max(1, Math.floor(cssH * dpr));
+  canvas.style.width = `${cssW}px`;
+  canvas.style.height = `${cssH}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const samples = clamp(opts.samples ?? 2048, 256, 8192);
   const M = clamp(opts.epicycles ?? 300, 16, 800);
@@ -180,8 +213,9 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
 
   const P0 = resamplePathByArcLength(oneLinePath, samples);
   if (P0.length < 4) {
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = CANVAS_BG;
+    ctx.fillRect(0, 0, cssW, cssH);
+    if (typeof opts.onComplete === "function") opts.onComplete();
     return () => {};
   }
 
@@ -190,7 +224,7 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
   const K = kSequence(M);
   const DFT = computeDFT(P, K);
 
-  const { scale } = fitToCanvasTransform(canvas, P, 0.88);
+  const { scale } = fitToCanvasTransform(cssW, cssH, P, 0.88);
   const seamIdx = autoSeam ? findLargestWrapJumpIndex(P) : 0;
   const phaseOffset = (-2 * Math.PI * seamIdx) / Math.max(1, P.length);
 
@@ -210,10 +244,10 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
 
     // Slight trailing effect like the Observable reference.
     ctx.save();
-    ctx.fillStyle = `rgba(255, 255, 255, ${fadeAlpha})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = `rgba(246, 246, 246, ${fadeAlpha})`;
+    ctx.fillRect(0, 0, cssW, cssH);
 
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.translate(cssW / 2, cssH / 2);
     ctx.scale(scale, scale);
 
     ctx.beginPath();
@@ -235,14 +269,19 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
     ctx.restore();
 
     if (loop || m < M) raf = requestAnimationFrame(drawFrame);
+    else {
+      raf = 0;
+      if (!cancelled && typeof opts.onComplete === "function") opts.onComplete();
+    }
   };
 
   // Initialize background so the first fade doesn't start from transparent.
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = CANVAS_BG;
+  ctx.fillRect(0, 0, cssW, cssH);
   raf = requestAnimationFrame(drawFrame);
 
   return () => {
+    cancelled = true;
     if (raf) cancelAnimationFrame(raf);
   };
 }
