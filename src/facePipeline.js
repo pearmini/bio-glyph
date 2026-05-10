@@ -16,6 +16,7 @@ function ensureMediaPipeModels() {
   if (!loadPromise) {
     loadPromise = (async () => {
       const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
+      /** Only one face result: MediaPipe's strongest / dominant face when several appear in frame. */
       const faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: FACE_MODEL, delegate: "CPU" },
         runningMode: "IMAGE",
@@ -33,13 +34,11 @@ function ensureMediaPipeModels() {
   return loadPromise;
 }
 
-/** MediaPipe face landmarker + selfie segmenter: feature outlines in image pixels and canvas preview. */
-
 /**
  * @mediapipe/tasks-vision JS omits `FaceLandmarker.FACE_LANDMARKS_NOSE` (it is undefined).
  * Same edges as Python `FaceLandmarksConnections.FACE_LANDMARKS_NOSE` so nose + lips both draw.
  */
-export const FACE_LANDMARKS_NOSE = [
+const FACE_LANDMARKS_NOSE = [
   { start: 168, end: 6 },
   { start: 6, end: 197 },
   { start: 197, end: 195 },
@@ -100,6 +99,22 @@ function idxFromConnections(conns) {
     s.add(e.end);
   }
   return [...s].sort((a, b) => a - b);
+}
+
+/** Horizontal extent of an eye contour in segmenter mask x (0…mw). */
+function eyeXBoundsMaskSpace(lm, eyeConns, mw) {
+  const ix = idxFromConnections(eyeConns);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  for (const i of ix) {
+    const p = lm[i];
+    if (!p) continue;
+    const x = p.x * mw;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+  }
+  if (!(minX <= maxX)) return null;
+  return { minX, maxX };
 }
 
 function cross2(o, a, b) {
@@ -168,9 +183,36 @@ function maskRingToImagePixels(ring, mw, mh, iw, ih) {
   return ring.map(([x, y]) => [x * sx, y * sy]);
 }
 
-export function syncOverlaySize(imgEl, overlay, stageOutlinesEl) {
-  const nw = imgEl.naturalWidth;
-  const nh = imgEl.naturalHeight;
+/**
+ * Intrinsic pixel size of an image, video frame, or canvas (for layout + MediaPipe).
+ * @param {HTMLImageElement | HTMLVideoElement | HTMLCanvasElement} el
+ */
+function getIntrinsicDimensions(el) {
+  if (el instanceof HTMLImageElement) {
+    return { width: el.naturalWidth, height: el.naturalHeight };
+  }
+  if (el instanceof HTMLVideoElement) {
+    return { width: el.videoWidth, height: el.videoHeight };
+  }
+  if (el instanceof HTMLCanvasElement) {
+    return { width: el.width, height: el.height };
+  }
+  return { width: 0, height: 0 };
+}
+
+/**
+ * @param {HTMLImageElement | HTMLVideoElement | HTMLCanvasElement} el
+ */
+function isFaceSourceReady(el) {
+  const { width, height } = getIntrinsicDimensions(el);
+  if (!width || !height) return false;
+  if (el instanceof HTMLImageElement && !el.complete) return false;
+  return true;
+}
+
+/** @param {HTMLImageElement | HTMLVideoElement | HTMLCanvasElement} sourceEl */
+export function syncOverlaySize(sourceEl, overlay, stageOutlinesEl) {
+  const { width: nw, height: nh } = getIntrinsicDimensions(sourceEl);
   if (!nw || !nh) return;
   overlay.width = nw;
   overlay.height = nh;
@@ -572,11 +614,15 @@ function contourFromMask(bin, mw, mh, rdpEps) {
 }
 
 /**
- * Ears = face_skin & ~inside_oval on mask grid; morph; split at nose x (notebook);
- * keep largest per side; smooth_ear_mask; largest again.
+ * Ears = face_skin & ~inside_oval on mask grid; morph; split by eye geometry:
+ * - If anatomical left eye is on the image-left (mirrored webcam): left ear = mask x left of left eye;
+ *   right ear = mask x right of right eye.
+ * - If anatomical left eye is on the image-right (standard photo): left ear = x past temporal side of
+ *   left eye; right ear = x past nasal side of right eye.
+ * Fallback: nose-tip x split if eye bounds are missing.
  * @returns {{ left: number[][], right: number[][] }} rings in mask grid coordinates
  */
-function earOutlineRingsMaskSpace(u8, mw, mh, lm, ovalConns) {
+function earOutlineRingsMaskSpace(u8, mw, mh, lm, ovalConns, FL) {
   const inside = rasterizeOvalInsideMask(lm, ovalConns, mw, mh);
   const faceSkin = maskToBinary(u8, mw, mh, 3);
   let earsAll = new Uint8Array(mw * mh);
@@ -585,14 +631,34 @@ function earOutlineRingsMaskSpace(u8, mw, mh, lm, ovalConns) {
   }
   earsAll = morphEarsAllLikePython(earsAll, mw, mh);
 
-  const noseX = lm[1].x * mw;
+  const leftEye = eyeXBoundsMaskSpace(lm, FL.FACE_LANDMARKS_LEFT_EYE, mw);
+  const rightEye = eyeXBoundsMaskSpace(lm, FL.FACE_LANDMARKS_RIGHT_EYE, mw);
+  const noseX = lm[1]?.x != null ? lm[1].x * mw : mw * 0.5;
+
   const earL = new Uint8Array(mw * mh);
   const earR = new Uint8Array(mw * mh);
   for (let i = 0; i < earsAll.length; i++) {
     if (!earsAll[i]) continue;
     const mx = i % mw;
-    if (mx < noseX) earL[i] = 1;
-    else earR[i] = 1;
+    let goL;
+    let goR;
+    if (leftEye && rightEye) {
+      const leftCx = (leftEye.minX + leftEye.maxX) * 0.5;
+      const rightCx = (rightEye.minX + rightEye.maxX) * 0.5;
+      const leftEyeOnImageLeft = leftCx < rightCx;
+      if (leftEyeOnImageLeft) {
+        goL = mx < leftEye.minX;
+        goR = mx > rightEye.maxX;
+      } else {
+        goL = mx > leftEye.maxX;
+        goR = mx < rightEye.minX;
+      }
+    } else {
+      goL = mx < noseX;
+      goR = mx >= noseX;
+    }
+    if (goL) earL[i] = 1;
+    else if (goR) earR[i] = 1;
   }
 
   let eL = keepLargestComponent(earL, mw, mh);
@@ -616,18 +682,66 @@ function hairOutlineRingMaskSpace(u8, mw, mh) {
 }
 
 /**
- * One facial feature as a polyline in image coordinates (closed ring or hull), plus stroke style for preview.
- * @typedef {{ id: string, points: number[][], closed: boolean, strokeStyle: string, lineWidth: number }} FaceFeature
+ * Axis-aligned ROI in segmenter mask pixels around the primary face (hair above, ears sideways).
+ * @returns {{ x0: number, x1: number, y0: number, y1: number } | null}
  */
+function primaryFaceRoiMaskBounds(lm, ovalConns, mw, mh) {
+  const idx = orderedFaceOvalIndices(ovalConns);
+  let minX = mw,
+    maxX = 0,
+    minY = mh,
+    maxY = 0;
+  for (const i of idx) {
+    const p = lm[i];
+    if (!p) continue;
+    const x = p.x * mw;
+    const y = p.y * mh;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  if (!(maxX > minX && maxY > minY)) return null;
+  const w = maxX - minX;
+  const h = maxY - minY;
+  const padX = Math.max(8, w * 0.45);
+  const padTop = Math.max(8, h * 0.95);
+  const padBot = Math.max(8, h * 0.35);
+  return {
+    x0: Math.max(0, Math.floor(minX - padX)),
+    x1: Math.min(mw - 1, Math.ceil(maxX + padX)),
+    y0: Math.max(0, Math.floor(minY - padTop)),
+    y1: Math.min(mh - 1, Math.ceil(maxY + padBot)),
+  };
+}
+
+/** Zero multiclass labels outside ROI so hair/ears follow the same face as FaceLandmarker (category 0 = background). */
+function restrictSegmentationMaskToRoi(u8, mw, mh, bounds) {
+  if (!bounds) return u8;
+  const out = new Uint8Array(u8.length);
+  out.set(u8);
+  const { x0, x1, y0, y1 } = bounds;
+  for (let y = 0; y < mh; y++) {
+    for (let x = 0; x < mw; x++) {
+      if (x < x0 || x > x1 || y < y0 || y > y1) out[y * mw + x] = 0;
+    }
+  }
+  return out;
+}
+
+/** @typedef {{ id: string, points: number[][], closed: boolean }} FaceFeature */
 
 /**
  * Loads MediaPipe models on first call (then caches), runs face + segmenter, returns feature outlines
- * in **image pixel space** (`naturalWidth` × `naturalHeight`).
+ * in **source pixel space** (image natural size, video frame, or canvas bitmap).
+ * Single-face policy: FaceLandmarker uses `numFaces: 1`; segmentation labels outside that face’s ROI are cleared
+ * so hair/ears match the same subject (ImageSegmenter has no built-in face count).
  *
+ * @param {HTMLImageElement | HTMLVideoElement | HTMLCanvasElement} sourceEl
  * @returns {Promise<{ ok: true, features: FaceFeature[], imageWidth: number, imageHeight: number } | { ok: false, message: string }>}
  */
-export async function extractFaceFeaturesFromImage(imgEl) {
-  if (!imgEl.complete || imgEl.naturalWidth === 0) return { ok: false, message: "Image not ready." };
+export async function extractFaceFeaturesFromImage(sourceEl) {
+  if (!isFaceSourceReady(sourceEl)) return { ok: false, message: "Image not ready." };
 
   let faceLandmarker, imageSegmenter, FaceLandmarkerClass;
   try {
@@ -637,17 +751,17 @@ export async function extractFaceFeaturesFromImage(imgEl) {
     return { ok: false, message: "Failed to load models: " + msg };
   }
 
-  const iw = imgEl.naturalWidth;
-  const ih = imgEl.naturalHeight;
+  const { width: iw, height: ih } = getIntrinsicDimensions(sourceEl);
 
-  const faceRes = faceLandmarker.detect(imgEl);
-  const segRes = imageSegmenter.segment(imgEl);
+  const faceRes = faceLandmarker.detect(sourceEl);
+  const segRes = imageSegmenter.segment(sourceEl);
 
-  if (!faceRes.faceLandmarks || faceRes.faceLandmarks.length === 0) {
+  const landmarks = faceRes.faceLandmarks ?? [];
+  if (landmarks.length === 0) {
     return { ok: false, message: "No face detected." };
   }
 
-  const lm = faceRes.faceLandmarks[0];
+  const lm = landmarks[0];
   const FL = FaceLandmarkerClass;
   /** @type {FaceFeature[]} */
   const features = [];
@@ -657,9 +771,11 @@ export async function extractFaceFeaturesFromImage(imgEl) {
     segMh = 0;
   if (segRes.categoryMask) {
     const cm = segRes.categoryMask;
-    segU8 = cm.getAsUint8Array();
     segMw = cm.width;
     segMh = cm.height;
+    segU8 = new Uint8Array(cm.getAsUint8Array());
+    const roi = primaryFaceRoiMaskBounds(lm, FL.FACE_LANDMARKS_FACE_OVAL, segMw, segMh);
+    segU8 = restrictSegmentationMaskToRoi(segU8, segMw, segMh, roi);
 
     const hairRing = hairOutlineRingMaskSpace(segU8, segMw, segMh);
     const hairPx = maskRingToImagePixels(hairRing, segMw, segMh, iw, ih);
@@ -668,87 +784,368 @@ export async function extractFaceFeaturesFromImage(imgEl) {
         id: "hair",
         points: hairPx,
         closed: true,
-        strokeStyle: "#00e5ff",
-        lineWidth: 2,
       });
     }
   }
 
   const oval = faceOvalRingImagePx(lm, FL.FACE_LANDMARKS_FACE_OVAL, iw, ih);
+  /** @type {number[][] | null} */
+  let leftEarPx = null;
+  /** @type {number[][] | null} */
+  let rightEarPx = null;
+  if (segU8) {
+    const { left: ringL, right: ringR } = earOutlineRingsMaskSpace(
+      segU8,
+      segMw,
+      segMh,
+      lm,
+      FL.FACE_LANDMARKS_FACE_OVAL,
+      FL,
+    );
+    const leftPx = maskRingToImagePixels(ringL, segMw, segMh, iw, ih);
+    const rightPx = maskRingToImagePixels(ringR, segMw, segMh, iw, ih);
+    if (leftPx.length >= 3) leftEarPx = leftPx;
+    if (rightPx.length >= 3) rightEarPx = rightPx;
+  }
+
+  const pushHull = (id, indices) => {
+    const ring = convexHullLandmarksImagePx(lm, indices, iw, ih);
+    if (ring.length >= 3) features.push({ id, points: ring, closed: true });
+  };
+
+  pushHull("lips", idxFromConnections(FL.FACE_LANDMARKS_LIPS));
+  pushHull("nose", idxFromConnections(FACE_LANDMARKS_NOSE));
+  pushHull("leftEye", idxFromConnections(FL.FACE_LANDMARKS_LEFT_EYE));
+  pushHull("leftEyebrow", idxFromConnections(FL.FACE_LANDMARKS_LEFT_EYEBROW));
+  pushHull("rightEyebrow", idxFromConnections(FL.FACE_LANDMARKS_RIGHT_EYEBROW));
+  pushHull("rightEye", idxFromConnections(FL.FACE_LANDMARKS_RIGHT_EYE));
+
+  const hasHair = features.some((f) => f.id === "hair" && f.points.length >= 3);
+
   if (oval.length >= 3) {
+    let shellPts = oval.map((p) => [p[0], p[1]]);
+    let shellClosed = true;
+    if (hasHair) {
+      const { bottom } = splitFaceShellIntoTopBottom(oval, leftEarPx, rightEarPx);
+      if (bottom.length >= 2) {
+        shellPts = orientBottomArcRightEarToLeftEar(bottom, rightEarPx, leftEarPx);
+        shellClosed = false;
+      }
+    }
     features.push({
-      id: "faceOval",
-      points: oval,
-      closed: true,
-      strokeStyle: "#deb887",
-      lineWidth: 2.5,
+      id: "faceShell",
+      points: shellPts,
+      closed: shellClosed,
     });
   }
 
-  if (segU8) {
-    const { left: ringL, right: ringR } = earOutlineRingsMaskSpace(segU8, segMw, segMh, lm, FL.FACE_LANDMARKS_FACE_OVAL);
-    const leftPx = maskRingToImagePixels(ringL, segMw, segMh, iw, ih);
-    const rightPx = maskRingToImagePixels(ringR, segMw, segMh, iw, ih);
-    if (leftPx.length >= 3) {
-      features.push({
-        id: "earLeft",
-        points: leftPx,
-        closed: true,
-        strokeStyle: "#ff8c00",
-        lineWidth: 2,
-      });
-    }
-    if (rightPx.length >= 3) {
-      features.push({
-        id: "earRight",
-        points: rightPx,
-        closed: true,
-        strokeStyle: "#ff4500",
-        lineWidth: 2,
-      });
-    }
+  if (hasHair && rightEarPx && rightEarPx.length >= 3) {
+    features.push({
+      id: "earRight",
+      points: rightEarPx.map((p) => [p[0], p[1]]),
+      closed: true,
+    });
   }
 
-  const pushHull = (id, indices, strokeStyle, lineWidth) => {
-    const ring = convexHullLandmarksImagePx(lm, indices, iw, ih);
-    if (ring.length >= 3) features.push({ id, points: ring, closed: true, strokeStyle, lineWidth });
-  };
-
-  pushHull("leftEyebrow", idxFromConnections(FL.FACE_LANDMARKS_LEFT_EYEBROW), "#ffb300", 1.6);
-  pushHull("rightEyebrow", idxFromConnections(FL.FACE_LANDMARKS_RIGHT_EYEBROW), "#ffb300", 1.6);
-  pushHull("leftEye", idxFromConnections(FL.FACE_LANDMARKS_LEFT_EYE), "#2e7d32", 1.5);
-  pushHull("rightEye", idxFromConnections(FL.FACE_LANDMARKS_RIGHT_EYE), "#2e7d32", 1.5);
-  pushHull("nose", idxFromConnections(FACE_LANDMARKS_NOSE), "#e53935", 1.5);
-  pushHull("lips", idxFromConnections(FL.FACE_LANDMARKS_LIPS), "#ab47bc", 1.6);
+  if (hasHair && leftEarPx && leftEarPx.length >= 3) {
+    features.push({
+      id: "earLeft",
+      points: leftEarPx.map((p) => [p[0], p[1]]),
+      closed: true,
+    });
+  }
 
   return { ok: true, features, imageWidth: iw, imageHeight: ih };
 }
 
+/** No hair: full landmark face oval only (no ears in stroke). */
+const ONE_LINE_ORDER_NO_HAIR = ["lips", "nose", "leftEye", "leftEyebrow", "rightEyebrow", "rightEye", "faceShell"];
+
+/** With hair: lips/nose → left → hair → right side → right ear → jaw arc → left ear. */
+const ONE_LINE_ORDER_WITH_HAIR = [
+  "lips",
+  "nose",
+  "leftEye",
+  "leftEyebrow",
+  "hair",
+  "rightEyebrow",
+  "rightEye",
+  "earRight",
+  "faceShell",
+  "earLeft",
+];
+
+function oneLineOrderForFeatures(features) {
+  const hasHair = features.some((f) => f.id === "hair" && f.points.length >= 2);
+  return hasHair ? ONE_LINE_ORDER_WITH_HAIR : ONE_LINE_ORDER_NO_HAIR;
+}
+
+function dist2Pt(a, b) {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  return dx * dx + dy * dy;
+}
+
+function findClosestPointIndex(points, p) {
+  let bestI = 0;
+  let best = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const d = dist2Pt(points[i], p);
+    if (d < best) {
+      best = d;
+      bestI = i;
+    }
+  }
+  return bestI;
+}
+
+function polyCentroid2D(pts) {
+  if (!pts.length) return [0, 0];
+  let sx = 0,
+    sy = 0;
+  for (const p of pts) {
+    sx += p[0];
+    sy += p[1];
+  }
+  return [sx / pts.length, sy / pts.length];
+}
+
+function walkRingForward(pts, iStart, iEnd) {
+  const n = pts.length;
+  const out = [[pts[iStart][0], pts[iStart][1]]];
+  if (iStart === iEnd) return out;
+  let i = iStart;
+  for (let k = 0; k < n; k++) {
+    i = (i + 1) % n;
+    out.push([pts[i][0], pts[i][1]]);
+    if (i === iEnd) break;
+  }
+  return out;
+}
+
+function meanYArc(arc) {
+  if (!arc.length) return 0;
+  let s = 0;
+  for (const p of arc) s += p[1];
+  return s / arc.length;
+}
+
+/** Split closed shell into upper (smaller mean y) and lower (jaw/cheeks) arcs. */
+function splitFaceShellIntoTopBottom(shellRing, leftEarPx, rightEarPx) {
+  if (shellRing.length < 4) return { top: [], bottom: [] };
+  const pts = shellRing.map((p) => [p[0], p[1]]);
+  const n = pts.length;
+
+  let iL, iR;
+  if (leftEarPx?.length >= 2 && rightEarPx?.length >= 2) {
+    iL = findClosestPointIndex(pts, polyCentroid2D(leftEarPx));
+    iR = findClosestPointIndex(pts, polyCentroid2D(rightEarPx));
+  } else {
+    let minX = Infinity,
+      maxX = -Infinity;
+    let iMin = 0,
+      iMax = 0;
+    for (let i = 0; i < n; i++) {
+      const x = pts[i][0];
+      if (x < minX) {
+        minX = x;
+        iMin = i;
+      }
+      if (x > maxX) {
+        maxX = x;
+        iMax = i;
+      }
+    }
+    iL = iMin;
+    iR = iMax;
+  }
+
+  const arcLR = walkRingForward(pts, iL, iR);
+  const arcRL = walkRingForward(pts, iR, iL);
+  if (meanYArc(arcLR) <= meanYArc(arcRL)) {
+    return { top: arcLR, bottom: arcRL };
+  }
+  return { top: arcRL, bottom: arcLR };
+}
+
 /**
- * Clear the canvas to white and stroke each feature outline.
- * @param {HTMLCanvasElement} canvas — bitmap size should match the source image used for extraction.
- * @param {Array<{ id: string, points: number[][], closed: boolean, strokeStyle: string, lineWidth: number }>} features
+ * Order bottom jaw arc so traversal runs from the oval point near the right ear to the point near
+ * the left ear (short bridges: right ear → first point, last point → left ear).
  */
-export function drawFaceFeaturesToCanvas(canvas, features) {
+function orientBottomArcRightEarToLeftEar(arc, rightEarPx, leftEarPx) {
+  if (arc.length < 2) return arc.map((p) => [p[0], p[1]]);
+  const copy = arc.map((p) => [p[0], p[1]]);
+  const a = copy[0];
+  const b = copy[copy.length - 1];
+  const reverse =
+    rightEarPx?.length >= 2 && leftEarPx?.length >= 2
+      ? dist2Pt(a, polyCentroid2D(rightEarPx)) > dist2Pt(a, polyCentroid2D(leftEarPx))
+      : a[0] < b[0];
+  if (reverse) copy.reverse();
+  return copy;
+}
+
+/** Closed polygon as one open traversal starting at startIdx (no repeated closing vertex). */
+function rotateClosedRing(points, startIdx) {
+  const n = points.length;
+  if (n < 2) return points.map((p) => p.slice());
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const p = points[(startIdx + k) % n];
+    out.push([p[0], p[1]]);
+  }
+  return out;
+}
+
+/**
+ * Merge feature rings into one polyline: each closed loop is rotated to meet the previous endpoint,
+ * so the pen never lifts (straight “bridges” between regions when needed).
+ * @param {Array<{ id: string, points: number[][], closed: boolean }>} features
+ * @param {string[]} [orderedIds]
+ * @returns {number[][]}
+ */
+function chainFeaturesToOnePath(features, orderedIds = oneLineOrderForFeatures(features)) {
+  const byId = new Map(features.map((f) => [f.id, f]));
+  const faceShellFeat = byId.get("faceShell");
+  let jawRightPt = null;
+  if (faceShellFeat && faceShellFeat.closed === false && faceShellFeat.points.length >= 2) {
+    const jp = faceShellFeat.points;
+    jawRightPt = [jp[0][0], jp[0][1]];
+  }
+  /** @type {number[][]} */
+  const out = [];
+  const eps2 = 0.15 * 0.15;
+
+  const pushPt = (p) => {
+    if (out.length && dist2Pt(out[out.length - 1], p) <= eps2) return;
+    out.push([p[0], p[1]]);
+  };
+
+  for (const id of orderedIds) {
+    const f = byId.get(id);
+    if (!f || f.points.length < 2) continue;
+
+    let pts = f.points.map((p) => [p[0], p[1]]);
+
+    if (f.closed && pts.length >= 3) {
+      const anchor = out.length ? out[out.length - 1] : pts[0];
+      if (id === "earRight" && jawRightPt) {
+        let bestS = 0;
+        let bestOutD = Infinity;
+        let bestInD = Infinity;
+        const n = pts.length;
+        for (let s = 0; s < n; s++) {
+          const rot = rotateClosedRing(pts, s);
+          const dOut = dist2Pt(rot[rot.length - 1], jawRightPt);
+          const dIn = dist2Pt(rot[0], anchor);
+          if (dOut < bestOutD - 1e-12 || (Math.abs(dOut - bestOutD) <= 1e-12 && dIn < bestInD)) {
+            bestOutD = dOut;
+            bestInD = dIn;
+            bestS = s;
+          }
+        }
+        pts = rotateClosedRing(pts, bestS);
+      } else {
+        const i0 = findClosestPointIndex(pts, anchor);
+        pts = rotateClosedRing(pts, i0);
+      }
+    }
+
+    for (const p of pts) pushPt(p);
+  }
+
+  return out;
+}
+
+function strokePathSmooth(ctx, path) {
+  if (path.length < 2) return;
+  if (path.length === 2) {
+    ctx.moveTo(path[0][0], path[0][1]);
+    ctx.lineTo(path[1][0], path[1][1]);
+    return;
+  }
+  ctx.moveTo(path[0][0], path[0][1]);
+  for (let i = 1; i < path.length - 1; i++) {
+    const xc = (path[i][0] + path[i + 1][0]) * 0.5;
+    const yc = (path[i][1] + path[i + 1][1]) * 0.5;
+    ctx.quadraticCurveTo(path[i][0], path[i][1], xc, yc);
+  }
+  const last = path[path.length - 1];
+  ctx.lineTo(last[0], last[1]);
+}
+
+/** Axis-aligned bbox of polyline vertices (path is [x,y][]). */
+function bboxFromPathPoints(path) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of path) {
+    minX = Math.min(minX, p[0]);
+    maxX = Math.max(maxX, p[0]);
+    minY = Math.min(minY, p[1]);
+    maxY = Math.max(maxY, p[1]);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Single continuous “one line” portrait (white background, one stroke).
+ * By default fits the stroke’s bounding box into the canvas and centers it (uniform scale).
+ * @param {HTMLCanvasElement} canvas
+ * @param {FaceFeature[]} features
+ * @param {{ lineWidth?: number, strokeStyle?: string, order?: string[], smooth?: boolean, fitAndCenter?: boolean, fitMargin?: number }} [options]
+ */
+export function drawOneLineFaceToCanvas(canvas, features, options = {}) {
+  const lineWidth = options.lineWidth ?? 2.25;
+  const strokeStyle = options.strokeStyle ?? "#141414";
+  const order = options.order ?? oneLineOrderForFeatures(features);
+  const smooth = options.smooth !== false;
+  const fitAndCenter = options.fitAndCenter !== false;
+  const fitMargin = options.fitMargin ?? 0.92;
+
+  const path = chainFeaturesToOnePath(features, order);
   const ctx = canvas.getContext("2d");
+  if (!ctx) return;
   const W = canvas.width;
   const H = canvas.height;
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, W, H);
+  if (path.length < 2) return;
+
+  ctx.save();
+  if (fitAndCenter) {
+    const b = bboxFromPathPoints(path);
+    let { minX, minY, maxX, maxY } = b;
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    const inflate = Math.max(lineWidth * 3, Math.max(spanX, spanY, 1) * 0.04, Math.min(W, H) * 0.01);
+    minX -= inflate;
+    maxX += inflate;
+    minY -= inflate;
+    maxY += inflate;
+    const bw = Math.max(maxX - minX, 1e-6);
+    const bh = Math.max(maxY - minY, 1e-6);
+    const cx = (minX + maxX) * 0.5;
+    const cy = (minY + maxY) * 0.5;
+    const scale = Math.min(W / bw, H / bh) * fitMargin;
+    ctx.translate(W * 0.5, H * 0.5);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -cy);
+    ctx.lineWidth = lineWidth / scale;
+  } else {
+    ctx.lineWidth = lineWidth;
+  }
+
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-
-  for (const feature of features) {
-    const { points, closed, strokeStyle, lineWidth } = feature;
-    if (points.length < 2) continue;
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = lineWidth;
-    ctx.beginPath();
-    points.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(p[0], p[1]);
-      else ctx.lineTo(p[0], p[1]);
-    });
-    if (closed) ctx.closePath();
-    ctx.stroke();
+  ctx.strokeStyle = strokeStyle;
+  ctx.beginPath();
+  if (smooth) strokePathSmooth(ctx, path);
+  else {
+    ctx.moveTo(path[0][0], path[0][1]);
+    for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0], path[i][1]);
   }
+  ctx.stroke();
+  ctx.restore();
 }
