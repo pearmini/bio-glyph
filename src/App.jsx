@@ -209,13 +209,6 @@ export default function App() {
     const canvas = resultCanvasRef.current;
     if (!canvas || !resultPath || resultPath.length < 2) return;
 
-    const parent = canvas.parentElement;
-    const rect = parent ? parent.getBoundingClientRect() : null;
-    const cw = rect ? Math.max(1, Math.floor(rect.width)) : 512;
-    const ch = rect ? Math.max(1, Math.floor(rect.height)) : 512;
-    canvas.width = cw;
-    canvas.height = ch;
-
     return startFourierOneLineAnimation(canvas, resultPath, {
       samples: 2048,
       epicycles: 320,

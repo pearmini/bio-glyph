@@ -85,12 +85,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 1.35rem;
   max-width: 100%;
 }
 
 .stage__column--result {
-  gap: 1.25rem;
+  gap: 2.25rem;
 }
 
 .stage__result-actions {
@@ -104,7 +104,7 @@
 /* Capture (camera / generating): square box, circular mask. */
 .circle-viewport {
   position: relative;
-  width: min(72vmin, 420px);
+  width: min(80vmin, 480px);
   max-width: 100%;
   aspect-ratio: 1;
   height: auto;
