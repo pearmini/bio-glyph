@@ -6,6 +6,21 @@
   min-height: 0;
   box-sizing: border-box;
   background-color: #f6f6f6;
+  color-scheme: light;
+}
+
+/* Fullscreen: keep light chrome; browsers often default backdrop to black. */
+.app-root:fullscreen,
+.app-root:-webkit-full-screen {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: #f6f6f6;
+}
+
+.app-root:fullscreen::backdrop,
+.app-root:-webkit-full-screen::backdrop {
+  background-color: #f6f6f6;
 }
 
 .app-top-bar {
