@@ -138,11 +138,7 @@ export default function App() {
     canvas.height = vh;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.save();
-    ctx.translate(vw, 0);
-    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, vw, vh);
-    ctx.restore();
 
     let freezeUrl = null;
     try {
@@ -283,7 +279,7 @@ export default function App() {
             <div className="circle-viewport">
               <video
                 ref={videoRef}
-                className="circle-viewport__video circle-viewport__video--mirror"
+                className="circle-viewport__video"
                 playsInline
                 muted
                 autoPlay
@@ -303,7 +299,7 @@ export default function App() {
                 <img
                   src={generatingFrameUrl}
                   alt=""
-                  className="circle-viewport__freeze circle-viewport__video--mirror"
+                  className="circle-viewport__freeze"
                 />
               ) : null}
             </div>

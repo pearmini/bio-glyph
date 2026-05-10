@@ -130,10 +130,6 @@
   display: block;
 }
 
-.circle-viewport__video--mirror {
-  transform: scaleX(-1);
-}
-
 /* Fourier output: square with rounded corners (not a circle). */
 .circle-viewport--result {
   background: #f6f6f6;
