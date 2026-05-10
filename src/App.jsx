@@ -6,23 +6,26 @@ import {
 } from "./facePipeline.js";
 import "./App.css";
 
-/** @typedef {"idle" | "preview" | "captured"} CapturePhase */
+const VIDEO_CONSTRAINTS = {
+  video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+  audio: false,
+};
+
+/** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
 
 export default function App() {
   const videoRef = useRef(null);
   const captureCanvasRef = useRef(null);
   const overlayRef = useRef(null);
-  const stageOutlinesRef = useRef(null);
   const streamRef = useRef(null);
 
-  /** @type {[CapturePhase, React.Dispatch<React.SetStateAction<CapturePhase>>]} */
+  /** @type {[AppPhase, React.Dispatch<React.SetStateAction<AppPhase>>]} */
   const [phase, setPhase] = useState("idle");
   const [cameraError, setCameraError] = useState(null);
   const [extractError, setExtractError] = useState(null);
-  /** Full-screen centered outline only; hides capture/compare UI (not a modal). */
-  const [outlineResultView, setOutlineResultView] = useState(false);
-  /** PNG data URL of the outline when user confirms. */
-  const [confirmedOutlineUrl, setConfirmedOutlineUrl] = useState(null);
+  const [resultImageUrl, setResultImageUrl] = useState(null);
+  /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
+  const [previewSession, setPreviewSession] = useState(0);
 
   const stopStream = useCallback(() => {
     const s = streamRef.current;
@@ -44,37 +47,57 @@ export default function App() {
     }
   }, []);
 
-  const runOnSource = useCallback(async (sourceEl) => {
-    const overlay = overlayRef.current;
-    if (!sourceEl || !overlay) return;
-    syncOverlaySize(sourceEl, overlay, stageOutlinesRef.current);
-    const extracted = await extractFaceFeaturesFromImage(sourceEl);
-    if (extracted.ok) {
-      drawOneLineFaceToCanvas(overlay, extracted.features);
-      setExtractError(null);
-    } else {
+  const runOnSource = useCallback(
+    async (sourceEl) => {
+      const overlay = overlayRef.current;
+      if (!sourceEl || !overlay) return false;
+      syncOverlaySize(sourceEl, overlay, null);
+      const extracted = await extractFaceFeaturesFromImage(sourceEl);
+      if (extracted.ok) {
+        drawOneLineFaceToCanvas(overlay, extracted.features);
+        setExtractError(null);
+        return true;
+      }
       clearOverlay();
       setExtractError(extracted.message);
-    }
-  }, [clearOverlay]);
+      return false;
+    },
+    [clearOverlay],
+  );
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
-    setExtractError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia(VIDEO_CONSTRAINTS);
       streamRef.current = stream;
+      setPreviewSession((n) => n + 1);
       setPhase("preview");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setCameraError(msg);
+      setPhase("idle");
     }
   }, []);
 
-  const capture = useCallback(async () => {
+  const retake = useCallback(async () => {
+    stopStream();
+    clearOverlay();
+    setResultImageUrl(null);
+    setExtractError(null);
+    setCameraError(null);
+    setPhase("preview");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(VIDEO_CONSTRAINTS);
+      streamRef.current = stream;
+      setPreviewSession((n) => n + 1);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setCameraError(msg);
+      setPhase("idle");
+    }
+  }, [stopStream, clearOverlay]);
+
+  const generate = useCallback(async () => {
     const video = videoRef.current;
     const canvas = captureCanvasRef.current;
     if (!video || !canvas) return;
@@ -93,44 +116,28 @@ export default function App() {
     ctx.restore();
 
     stopStream();
-    setPhase("captured");
+    setPhase("generating");
+    setCameraError(null);
 
-    await runOnSource(canvas);
-  }, [runOnSource, stopStream]);
-
-  const cancelPreview = useCallback(() => {
-    stopStream();
-    clearOverlay();
-    setPhase("idle");
-    setExtractError(null);
-  }, [stopStream, clearOverlay]);
-
-  const retake = useCallback(() => {
-    stopStream();
-    clearOverlay();
-    setPhase("idle");
-    setExtractError(null);
-    setOutlineResultView(false);
-    setConfirmedOutlineUrl(null);
-  }, [stopStream, clearOverlay]);
-
-  const openConfirmedOutline = useCallback(() => {
-    if (extractError) return;
-    const overlay = overlayRef.current;
-    if (!overlay?.width) return;
-    try {
-      setConfirmedOutlineUrl(overlay.toDataURL("image/png"));
-      setOutlineResultView(true);
-    } catch {
-      /* canvas may be tainted in edge cases */
+    const ok = await runOnSource(canvas);
+    if (ok) {
+      const overlay = overlayRef.current;
+      try {
+        const url = overlay?.toDataURL("image/png");
+        if (url) {
+          setResultImageUrl(url);
+          setPhase("result");
+        } else {
+          void startCamera();
+        }
+      } catch {
+        void startCamera();
+      }
+    } else {
+      void startCamera();
     }
-  }, [extractError]);
+  }, [runOnSource, stopStream, startCamera]);
 
-  const leaveOutlineResultView = useCallback(() => {
-    setOutlineResultView(false);
-  }, []);
-
-  /** After paint, `phase === "preview"` shows the video and we attach the MediaStream. */
   useEffect(() => {
     if (phase !== "preview") return;
     const video = videoRef.current;
@@ -141,7 +148,7 @@ export default function App() {
     void video.play();
 
     const sync = () => {
-      syncOverlaySize(video, overlayRef.current, stageOutlinesRef.current);
+      syncOverlaySize(video, overlayRef.current, null);
     };
 
     video.addEventListener("loadedmetadata", sync);
@@ -151,99 +158,62 @@ export default function App() {
       video.removeEventListener("loadedmetadata", sync);
       if (video.srcObject === stream) video.srcObject = null;
     };
-  }, [phase]);
-
-  useEffect(() => {
-    if (!outlineResultView) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") leaveOutlineResultView();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [outlineResultView, leaveOutlineResultView]);
-
-  const canConfirmOutline = phase === "captured" && !extractError;
+  }, [phase, previewSession]);
 
   return (
-    <div className={`app-root${outlineResultView ? " app-root--outline-result" : ""}`}>
-      {!outlineResultView && (
-        <>
-      <header className="toolbar">
+    <div className="app-root">
+      <main className="stage">
         {phase === "idle" && (
-          <button type="button" className="toolbar__btn" onClick={startCamera}>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => {
+              setExtractError(null);
+              void startCamera();
+            }}
+          >
             Start camera
           </button>
         )}
+
         {phase === "preview" && (
-          <>
-            <span className="toolbar__hint">Live preview — frame your face, then capture.</span>
-            <button type="button" className="toolbar__btn toolbar__btn--primary" onClick={capture}>
-              Capture
+          <div className="stage__column">
+            <div className="circle-viewport">
+              <video
+                ref={videoRef}
+                className="circle-viewport__video circle-viewport__video--mirror"
+                playsInline
+                muted
+                autoPlay
+              />
+            </div>
+            <p className="stage__tip">Place your face in the circle</p>
+            <button type="button" className="btn btn--primary" onClick={() => void generate()}>
+              Generate
             </button>
-            <button type="button" className="toolbar__btn" onClick={cancelPreview}>
-              Cancel
-            </button>
-          </>
+          </div>
         )}
-        {phase === "captured" && (
-          <>
-            <button
-              type="button"
-              className="toolbar__btn toolbar__btn--primary"
-              onClick={openConfirmedOutline}
-              disabled={!canConfirmOutline}
-            >
-              Confirm image
-            </button>
-            <button type="button" className="toolbar__btn" onClick={retake}>
+
+        {phase === "generating" && <p className="stage__generating">Generating…</p>}
+
+        {phase === "result" && resultImageUrl && (
+          <div className="stage__column stage__column--result">
+            <img src={resultImageUrl} alt="One-line face outline" className="stage__result-img" />
+            <button type="button" className="btn" onClick={() => void retake()}>
               Retake
             </button>
-          </>
-        )}
-        {cameraError && <span className="toolbar__msg toolbar__msg--error">{cameraError}</span>}
-        {extractError && <span className="toolbar__msg toolbar__msg--error">{extractError}</span>}
-      </header>
-
-      <div className="compare">
-        <div className={`source-slot ${phase === "preview" ? "source-slot--live" : ""}`}>
-          {phase === "idle" && (
-            <div className="source source--placeholder">
-              <p className="source--placeholder__hint">Start the camera, then capture a frame to outline your face.</p>
-            </div>
-          )}
-          <video
-            ref={videoRef}
-            className="source source--mirror source--live"
-            playsInline
-            muted
-            autoPlay
-            style={{ display: phase === "preview" ? "block" : "none" }}
-          />
-          <canvas
-            ref={captureCanvasRef}
-            className="source"
-            style={{ display: phase === "captured" ? "block" : "none" }}
-            aria-hidden={phase !== "captured"}
-          />
-        </div>
-
-        <div className="output" ref={stageOutlinesRef}>
-          <canvas ref={overlayRef} />
-        </div>
-      </div>
-        </>
-      )}
-
-      {outlineResultView && confirmedOutlineUrl && (
-        <div className="outline-result">
-          <button type="button" className="outline-result__back toolbar__btn" onClick={leaveOutlineResultView}>
-            Back
-          </button>
-          <div className="outline-result__stage">
-            <img src={confirmedOutlineUrl} alt="" className="outline-result__img" />
           </div>
-        </div>
-      )}
+        )}
+
+        {(cameraError || extractError) && (
+          <p className="stage__error" role="alert">
+            {cameraError || extractError}
+          </p>
+        )}
+      </main>
+
+      <canvas ref={captureCanvasRef} className="offscreen-canvas" aria-hidden />
+      <canvas ref={overlayRef} className="offscreen-canvas" aria-hidden />
     </div>
   );
 }
