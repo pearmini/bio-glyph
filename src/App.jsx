@@ -297,8 +297,8 @@ export default function App() {
         )}
 
         {phase === "generating" && (
-          <div className="stage__column">
-            <div className="circle-viewport circle-viewport--busy">
+          <div className="stage__column" aria-busy="true">
+            <div className="circle-viewport">
               {generatingFrameUrl ? (
                 <img
                   src={generatingFrameUrl}
@@ -306,13 +306,7 @@ export default function App() {
                   className="circle-viewport__freeze circle-viewport__video--mirror"
                 />
               ) : null}
-              <div className="circle-viewport__mask" aria-hidden />
-              <div className="circle-viewport__spinner-wrap" role="status" aria-live="polite">
-                <span className="circle-viewport__spinner" aria-label="Generating outline" />
-                <span className="circle-viewport__spinner-label">Generating…</span>
-              </div>
             </div>
-            <p className="stage__tip stage__tip--muted">This may take a moment</p>
             <button type="button" className="btn btn--primary btn--busy" disabled>
               Generate
             </button>
