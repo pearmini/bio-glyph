@@ -5,7 +5,13 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores([
+    'dist',
+    '**/node_modules/**',
+    // Python env ships browser bundles (e.g. Jupyter); ESLint should not traverse it.
+    'python/**',
+    '**/.venv/**',
+  ]),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
