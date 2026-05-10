@@ -6,6 +6,7 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
+import { Maximize2 } from "lucide-react";
 import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
 
 const VIDEO_CONSTRAINTS = {
@@ -13,14 +14,24 @@ const VIDEO_CONSTRAINTS = {
   audio: false,
 };
 
+function getActiveFullscreenElement() {
+  return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
+}
+
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
 
 export default function App() {
+  const appRootRef = useRef(null);
   const videoRef = useRef(null);
   const captureCanvasRef = useRef(null);
   const overlayRef = useRef(null);
   const resultCanvasRef = useRef(null);
   const streamRef = useRef(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  /** Fourier result animation: false when finished, true while coeffs are animating. */
+  const [resultAnimPlaying, setResultAnimPlaying] = useState(false);
+  /** Increment to restart the result animation with the same path. */
+  const [resultReplayKey, setResultReplayKey] = useState(0);
 
   /** @type {[AppPhase, React.Dispatch<React.SetStateAction<AppPhase>>]} */
   const [phase, setPhase] = useState("idle");
@@ -93,6 +104,7 @@ export default function App() {
     clearOverlay();
     setGeneratingFrameUrl(null);
     setResultPath(null);
+    setResultReplayKey(0);
     setExtractError(null);
     setCameraError(null);
     setPhase("preview");
@@ -140,6 +152,7 @@ export default function App() {
     if (ok) {
       try {
         setGeneratingFrameUrl(null);
+        setResultAnimPlaying(true);
         setPhase("result");
       } catch {
         setGeneratingFrameUrl(null);
@@ -174,15 +187,25 @@ export default function App() {
   }, [phase, previewSession]);
 
   useEffect(() => {
+    if (phase !== "result") setResultAnimPlaying(false);
+  }, [phase]);
+
+  const replayResultAnimation = useCallback(() => {
+    setResultAnimPlaying(true);
+    setResultReplayKey((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
     if (phase !== "result") return;
     const canvas = resultCanvasRef.current;
     if (!canvas || !resultPath || resultPath.length < 2) return;
 
     const parent = canvas.parentElement;
     const rect = parent ? parent.getBoundingClientRect() : null;
-    const size = rect ? Math.max(1, Math.floor(Math.min(rect.width, rect.height))) : 512;
-    canvas.width = size;
-    canvas.height = size;
+    const cw = rect ? Math.max(1, Math.floor(rect.width)) : 512;
+    const ch = rect ? Math.max(1, Math.floor(rect.height)) : 512;
+    canvas.width = cw;
+    canvas.height = ch;
 
     return startFourierOneLineAnimation(canvas, resultPath, {
       samples: 2048,
@@ -195,11 +218,50 @@ export default function App() {
       loop: false,
       autoSeam: true,
       seamGapFraction: 0.02,
+      onComplete: () => setResultAnimPlaying(false),
     });
-  }, [phase, resultPath]);
+  }, [phase, resultPath, resultReplayKey]);
+
+  useEffect(() => {
+    const sync = () => {
+      const fs = getActiveFullscreenElement();
+      setIsFullscreen(fs !== null && fs === appRootRef.current);
+    };
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
+  }, []);
+
+  const enterFullscreen = useCallback(async () => {
+    const el = appRootRef.current;
+    if (!el) return;
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } catch {
+      /* blocked or unsupported */
+    }
+  }, []);
 
   return (
-    <div className="app-root">
+    <div ref={appRootRef} className="app-root">
+      <div className="app-top-bar">
+        <span className="app-brand">BioGlyph</span>
+        {!isFullscreen ? (
+          <button
+            type="button"
+            className="app-fullscreen-btn"
+            aria-label="Enter full screen"
+            onClick={() => void enterFullscreen()}
+          >
+            <Maximize2 size={18} strokeWidth={2} aria-hidden />
+          </button>
+        ) : null}
+      </div>
       <main className="stage">
         {phase === "idle" && (
           <button
@@ -260,9 +322,19 @@ export default function App() {
             <div className="circle-viewport circle-viewport--result">
               <canvas ref={resultCanvasRef} className="circle-viewport__result-canvas" aria-label="Fourier animation" />
             </div>
-            <button type="button" className="btn" onClick={() => void retake()}>
-              Retake
-            </button>
+            <div className="stage__result-actions">
+              <button
+                type="button"
+                className="btn"
+                disabled={resultAnimPlaying}
+                onClick={replayResultAnimation}
+              >
+                Replay
+              </button>
+              <button type="button" className="btn" onClick={() => void retake()}>
+                Retake
+              </button>
+            </div>
           </div>
         )}
 

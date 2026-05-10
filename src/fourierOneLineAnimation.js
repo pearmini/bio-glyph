@@ -14,6 +14,9 @@ function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
 }
 
+/** Matches app chrome (`index.css` / `.app-root`). */
+const CANVAS_BG = "#f6f6f6";
+
 function bboxFromPoints(pts) {
   let minX = Infinity,
     minY = Infinity,
@@ -160,12 +163,14 @@ function findLargestWrapJumpIndex(pts) {
  *  closeStroke?: boolean,
  *  seamGapFraction?: number,
  *  autoSeam?: boolean,
+ *  onComplete?: () => void,
  * }} [opts]
  */
 export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return () => {};
 
+  let cancelled = false;
   const samples = clamp(opts.samples ?? 2048, 256, 8192);
   const M = clamp(opts.epicycles ?? 300, 16, 800);
   const q = clamp(opts.outSamples ?? 1400, 256, 4000);
@@ -180,8 +185,9 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
 
   const P0 = resamplePathByArcLength(oneLinePath, samples);
   if (P0.length < 4) {
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = CANVAS_BG;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (typeof opts.onComplete === "function") opts.onComplete();
     return () => {};
   }
 
@@ -210,7 +216,7 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
 
     // Slight trailing effect like the Observable reference.
     ctx.save();
-    ctx.fillStyle = `rgba(255, 255, 255, ${fadeAlpha})`;
+    ctx.fillStyle = `rgba(246, 246, 246, ${fadeAlpha})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -235,14 +241,19 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
     ctx.restore();
 
     if (loop || m < M) raf = requestAnimationFrame(drawFrame);
+    else {
+      raf = 0;
+      if (!cancelled && typeof opts.onComplete === "function") opts.onComplete();
+    }
   };
 
   // Initialize background so the first fade doesn't start from transparent.
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   raf = requestAnimationFrame(drawFrame);
 
   return () => {
+    cancelled = true;
     if (raf) cancelAnimationFrame(raf);
   };
 }
