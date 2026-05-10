@@ -28,7 +28,7 @@ function bboxFromPoints(pts) {
 export function pathToBubbleSvg(path, size = 100) {
   const vb = `0 0 ${size} ${size}`;
   if (!path || path.length < 2) {
-    return { viewBox: vb, d: "", strokeWidth: 1.5 };
+    return { viewBox: vb, d: "", strokeWidth: 1 };
   }
   const bb = bboxFromPoints(path);
   const pad = 8;
@@ -44,7 +44,7 @@ export function pathToBubbleSvg(path, size = 100) {
   return {
     viewBox: vb,
     d: parts.join(" "),
-    strokeWidth: 2,
+    strokeWidth: 1.2,
   };
 }
 
