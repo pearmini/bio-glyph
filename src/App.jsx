@@ -6,7 +6,8 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, X } from "lucide-react";
+import QRCode from "qrcode";
 import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
 
 const VIDEO_CONSTRAINTS = {
@@ -25,7 +26,11 @@ function getActiveFullscreenElement() {
   return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
 }
 
+const LITTERBOX_UPLOAD =
+  "https://litterbox.catbox.moe/resources/internals/api.php";
+
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
+/** @typedef {"idle" | "uploading" | "ready" | "error"} SharePhase */
 
 export default function App() {
   const appRootRef = useRef(null);
@@ -50,6 +55,14 @@ export default function App() {
   const [generatingFrameUrl, setGeneratingFrameUrl] = useState(null);
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
   const [previewSession, setPreviewSession] = useState(0);
+
+  const shareAbortRef = useRef(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  /** @type {[SharePhase, React.Dispatch<React.SetStateAction<SharePhase>>]} */
+  const [sharePhase, setSharePhase] = useState("idle");
+  const [shareImageUrl, setShareImageUrl] = useState(null);
+  const [shareQrDataUrl, setShareQrDataUrl] = useState(null);
+  const [shareError, setShareError] = useState(null);
 
   const stopStream = useCallback(() => {
     const s = streamRef.current;
@@ -192,7 +205,9 @@ export default function App() {
   }, [phase, previewSession]);
 
   useEffect(() => {
-    if (phase !== "result") setResultAnimPlaying(false);
+    if (phase !== "result") {
+      queueMicrotask(() => setResultAnimPlaying(false));
+    }
   }, [phase]);
 
   const replayResultAnimation = useCallback(() => {
@@ -217,6 +232,90 @@ export default function App() {
       /* tainted canvas or unsupported */
     }
   }, []);
+
+  const closeShareModal = useCallback(() => {
+    shareAbortRef.current?.abort();
+    shareAbortRef.current = null;
+    setShareOpen(false);
+    setSharePhase("idle");
+    setShareImageUrl(null);
+    setShareQrDataUrl(null);
+    setShareError(null);
+  }, []);
+
+  const openShareModal = useCallback(() => {
+    const canvas = resultCanvasRef.current;
+    if (!canvas || canvas.width < 1 || canvas.height < 1) return;
+
+    shareAbortRef.current?.abort();
+    const ac = new AbortController();
+    shareAbortRef.current = ac;
+
+    setShareOpen(true);
+    setSharePhase("uploading");
+    setShareImageUrl(null);
+    setShareQrDataUrl(null);
+    setShareError(null);
+
+    try {
+      canvas.toBlob(
+        async (blob) => {
+          if (ac.signal.aborted) return;
+          if (!blob) {
+            setSharePhase("error");
+            setShareError("Could not read image.");
+            return;
+          }
+          try {
+            const fd = new FormData();
+            fd.append("reqtype", "fileupload");
+            fd.append("time", "1h");
+            fd.append("fileToUpload", blob, `bioglyph-${Date.now()}.png`);
+            const res = await fetch(LITTERBOX_UPLOAD, {
+              method: "POST",
+              body: fd,
+              signal: ac.signal,
+            });
+            if (!res.ok) {
+              throw new Error(`Upload failed (${res.status})`);
+            }
+            const text = (await res.text()).trim();
+            if (!text.startsWith("http")) {
+              throw new Error("Unexpected response from upload service.");
+            }
+            if (ac.signal.aborted) return;
+            setShareImageUrl(text);
+            const qr = await QRCode.toDataURL(text, {
+              width: 220,
+              margin: 2,
+              color: { dark: "#141414", light: "#ffffff" },
+            });
+            if (ac.signal.aborted) return;
+            setShareQrDataUrl(qr);
+            setSharePhase("ready");
+          } catch (e) {
+            if (ac.signal.aborted) return;
+            if (e instanceof DOMException && e.name === "AbortError") return;
+            setSharePhase("error");
+            setShareError(e instanceof Error ? e.message : "Share failed.");
+          }
+        },
+        "image/png",
+      );
+    } catch {
+      setSharePhase("error");
+      setShareError("Could not read image.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!shareOpen) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") closeShareModal();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [shareOpen, closeShareModal]);
 
   useEffect(() => {
     if (phase !== "result") return;
@@ -347,6 +446,9 @@ export default function App() {
               <button type="button" className="btn" onClick={downloadResultImage}>
                 Download
               </button>
+              <button type="button" className="btn" onClick={openShareModal}>
+                Share
+              </button>
             </div>
           </div>
         )}
@@ -360,6 +462,70 @@ export default function App() {
 
       <canvas ref={captureCanvasRef} className="offscreen-canvas" aria-hidden />
       <canvas ref={overlayRef} className="offscreen-canvas" aria-hidden />
+
+      {shareOpen ? (
+        <div
+          className="share-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="share-modal-title"
+        >
+          <button
+            type="button"
+            className="share-modal__backdrop"
+            aria-label="Close share dialog"
+            onClick={closeShareModal}
+          />
+          <div className="share-modal__panel">
+            <div className="share-modal__header">
+              <h2 id="share-modal-title" className="share-modal__title">
+                Share
+              </h2>
+              <button
+                type="button"
+                className="share-modal__close"
+                aria-label="Close"
+                onClick={closeShareModal}
+              >
+                <X size={20} strokeWidth={2} aria-hidden />
+              </button>
+            </div>
+            {sharePhase === "uploading" ? (
+              <p className="share-modal__status">Preparing link…</p>
+            ) : null}
+            {sharePhase === "error" ? (
+              <p className="share-modal__error" role="alert">
+                {shareError ?? "Something went wrong."}
+              </p>
+            ) : null}
+            {sharePhase === "ready" && shareQrDataUrl ? (
+              <div className="share-modal__body">
+                <img
+                  src={shareQrDataUrl}
+                  alt="QR code linking to this image"
+                  className="share-modal__qr"
+                  width={220}
+                  height={220}
+                />
+                <p className="share-modal__hint">
+                  Scan to open the image, then save it from your browser. Link expires in about one
+                  hour.
+                </p>
+                {shareImageUrl ? (
+                  <a
+                    href={shareImageUrl}
+                    className="share-modal__link"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open link
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
