@@ -215,24 +215,6 @@ export default function App() {
     setResultReplayKey((n) => n + 1);
   }, []);
 
-  const downloadResultImage = useCallback(() => {
-    const canvas = resultCanvasRef.current;
-    if (!canvas || canvas.width < 1 || canvas.height < 1) return;
-    try {
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `bioglyph-${Date.now()}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }, "image/png");
-    } catch {
-      /* tainted canvas or unsupported */
-    }
-  }, []);
-
   const closeShareModal = useCallback(() => {
     shareAbortRef.current?.abort();
     shareAbortRef.current = null;
@@ -440,14 +422,11 @@ export default function App() {
               >
                 Replay
               </button>
-              <button type="button" className="btn" onClick={() => void retake()}>
-                Retake
-              </button>
-              <button type="button" className="btn" onClick={downloadResultImage}>
-                Download
-              </button>
               <button type="button" className="btn" onClick={openShareModal}>
                 Share
+              </button>
+              <button type="button" className="btn" onClick={() => void retake()}>
+                Retake
               </button>
             </div>
           </div>
