@@ -1057,6 +1057,17 @@ function chainFeaturesToOnePath(features, orderedIds = oneLineOrderForFeatures(f
   return out;
 }
 
+/**
+ * Exported for rendering/animation (e.g. Fourier progressive reconstruction) without forcing
+ * a static canvas stroke.
+ * @param {FaceFeature[]} features
+ * @param {string[]} [order]
+ * @returns {number[][]}
+ */
+export function buildOneLinePath(features, order) {
+  return chainFeaturesToOnePath(features, order ?? oneLineOrderForFeatures(features));
+}
+
 function strokePathSmooth(ctx, path) {
   if (path.length < 2) return;
   if (path.length === 2) {
