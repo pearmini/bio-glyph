@@ -416,7 +416,7 @@ export default function App() {
       fadeAlpha: 0.04,
       strokeStyle: "#141414",
       lineWidth: 2.25,
-      coeffsPerSecond: 82,
+      coeffsPerSecond: 65,
       loop: false,
       autoSeam: true,
       seamGapFraction: 0.02,
@@ -571,7 +571,7 @@ export default function App() {
                 Share
               </button>
               <button type="button" className="btn" onClick={() => void retake()}>
-                Retake
+                Back
               </button>
             </div>
           </div>
