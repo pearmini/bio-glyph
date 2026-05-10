@@ -14,6 +14,13 @@ const VIDEO_CONSTRAINTS = {
   audio: false,
 };
 
+/** Extra time on the generating screen after capture before analysis runs. */
+const GENERATING_HOLD_MS = 1000;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function getActiveFullscreenElement() {
   return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
 }
@@ -147,6 +154,8 @@ export default function App() {
     stopStream();
     setPhase("generating");
     setCameraError(null);
+
+    await delay(GENERATING_HOLD_MS);
 
     const ok = await runOnSource(canvas);
     if (ok) {
