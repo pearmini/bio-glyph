@@ -101,6 +101,18 @@
   transform: scaleX(-1);
 }
 
+.circle-viewport--result {
+  background: #ffffff;
+}
+
+.circle-viewport__result-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .stage__tip {
   margin: 0;
   font-size: 0.95rem;
@@ -113,15 +125,7 @@
   color: #666;
 }
 
-.stage__result-img {
-  display: block;
-  max-width: min(96vw, 920px);
-  max-height: min(85vh, 920px);
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  background: #fff;
-}
+/* (Static result image removed; result uses a canvas animation.) */
 
 .stage__error {
   margin: 0;

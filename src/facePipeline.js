@@ -164,6 +164,57 @@ function convexHullLandmarksImagePx(lm, indices, iw, ih) {
   return hull.length >= 3 ? hull : [];
 }
 
+/** Insert edge midpoints once around a closed ring (no duplicate closing vertex). */
+function subdivideClosedRingEdges(pts) {
+  const n = pts.length;
+  if (n < 3) return pts.map((p) => [p[0], p[1]]);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % n];
+    out.push([a[0], a[1]]);
+    out.push([(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5]);
+  }
+  return out;
+}
+
+/** One Chaikin corner-cutting pass on a closed polygon. */
+function chaikinClosedOnce(pts) {
+  const n = pts.length;
+  if (n < 3) return pts.map((p) => [p[0], p[1]]);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    const q = pts[(i + 1) % n];
+    out.push([0.75 * p[0] + 0.25 * q[0], 0.75 * p[1] + 0.25 * q[1]]);
+    out.push([0.25 * p[0] + 0.75 * q[0], 0.25 * p[1] + 0.75 * q[1]]);
+  }
+  return out;
+}
+
+/**
+ * Soften a closed hull ring: optional midpoint subdivision then Chaikin iterations.
+ * Convex input stays visually smooth and convex.
+ */
+function smoothClosedHullRing(pts, edgeSubdivisions, chaikinIterations) {
+  let r = pts.map((p) => [p[0], p[1]]);
+  const es = Math.max(0, edgeSubdivisions | 0);
+  const ci = Math.max(0, chaikinIterations | 0);
+  for (let s = 0; s < es; s++) r = subdivideClosedRingEdges(r);
+  for (let c = 0; c < ci; c++) r = chaikinClosedOnce(r);
+  return r;
+}
+
+/** Nose: convex hull of nose landmarks, then rounded for the one-line path / Fourier input. */
+const NOSE_HULL_EDGE_SUBDIVISIONS = 1;
+const NOSE_HULL_CHAIKIN_ITERATIONS = 2;
+
+function noseSmoothedHullImagePx(lm, iw, ih) {
+  const hull = convexHullLandmarksImagePx(lm, idxFromConnections(FACE_LANDMARKS_NOSE), iw, ih);
+  if (hull.length < 3) return [];
+  return smoothClosedHullRing(hull, NOSE_HULL_EDGE_SUBDIVISIONS, NOSE_HULL_CHAIKIN_ITERATIONS);
+}
+
 /** Closed loop along face-oval landmark graph in image pixel space (not a hull). */
 function faceOvalRingImagePx(lm, ovalConns, iw, ih) {
   const idx = orderedFaceOvalIndices(ovalConns);
@@ -814,7 +865,10 @@ export async function extractFaceFeaturesFromImage(sourceEl) {
   };
 
   pushHull("lips", idxFromConnections(FL.FACE_LANDMARKS_LIPS));
-  pushHull("nose", idxFromConnections(FACE_LANDMARKS_NOSE));
+  const nosePts = noseSmoothedHullImagePx(lm, iw, ih);
+  if (nosePts.length >= 3) {
+    features.push({ id: "nose", points: nosePts, closed: true });
+  }
   pushHull("leftEye", idxFromConnections(FL.FACE_LANDMARKS_LEFT_EYE));
   pushHull("leftEyebrow", idxFromConnections(FL.FACE_LANDMARKS_LEFT_EYEBROW));
   pushHull("rightEyebrow", idxFromConnections(FL.FACE_LANDMARKS_RIGHT_EYEBROW));
@@ -1055,6 +1109,17 @@ function chainFeaturesToOnePath(features, orderedIds = oneLineOrderForFeatures(f
   }
 
   return out;
+}
+
+/**
+ * Exported for rendering/animation (e.g. Fourier progressive reconstruction) without forcing
+ * a static canvas stroke.
+ * @param {FaceFeature[]} features
+ * @param {string[]} [order]
+ * @returns {number[][]}
+ */
+export function buildOneLinePath(features, order) {
+  return chainFeaturesToOnePath(features, order ?? oneLineOrderForFeatures(features));
 }
 
 function strokePathSmooth(ctx, path) {

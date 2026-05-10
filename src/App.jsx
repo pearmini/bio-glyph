@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   drawOneLineFaceToCanvas,
   extractFaceFeaturesFromImage,
+  buildOneLinePath,
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
+import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
 
 const VIDEO_CONSTRAINTS = {
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -17,13 +19,15 @@ export default function App() {
   const videoRef = useRef(null);
   const captureCanvasRef = useRef(null);
   const overlayRef = useRef(null);
+  const resultCanvasRef = useRef(null);
   const streamRef = useRef(null);
 
   /** @type {[AppPhase, React.Dispatch<React.SetStateAction<AppPhase>>]} */
   const [phase, setPhase] = useState("idle");
   const [cameraError, setCameraError] = useState(null);
   const [extractError, setExtractError] = useState(null);
-  const [resultImageUrl, setResultImageUrl] = useState(null);
+  /** @type {[number[][] | null, React.Dispatch<React.SetStateAction<number[][] | null>>]} */
+  const [resultPath, setResultPath] = useState(null);
   /** Last camera frame shown under the generating mask (data URL). */
   const [generatingFrameUrl, setGeneratingFrameUrl] = useState(null);
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
@@ -56,7 +60,10 @@ export default function App() {
       syncOverlaySize(sourceEl, overlay, null);
       const extracted = await extractFaceFeaturesFromImage(sourceEl);
       if (extracted.ok) {
+        // Keep the original static draw as a fallback/offscreen render,
+        // but prefer the path for Fourier animation in the result stage.
         drawOneLineFaceToCanvas(overlay, extracted.features);
+        setResultPath(buildOneLinePath(extracted.features));
         setExtractError(null);
         return true;
       }
@@ -85,7 +92,7 @@ export default function App() {
     stopStream();
     clearOverlay();
     setGeneratingFrameUrl(null);
-    setResultImageUrl(null);
+    setResultPath(null);
     setExtractError(null);
     setCameraError(null);
     setPhase("preview");
@@ -131,17 +138,9 @@ export default function App() {
 
     const ok = await runOnSource(canvas);
     if (ok) {
-      const overlay = overlayRef.current;
       try {
-        const url = overlay?.toDataURL("image/png");
-        if (url) {
-          setGeneratingFrameUrl(null);
-          setResultImageUrl(url);
-          setPhase("result");
-        } else {
-          setGeneratingFrameUrl(null);
-          void startCamera();
-        }
+        setGeneratingFrameUrl(null);
+        setPhase("result");
       } catch {
         setGeneratingFrameUrl(null);
         void startCamera();
@@ -173,6 +172,31 @@ export default function App() {
       if (video.srcObject === stream) video.srcObject = null;
     };
   }, [phase, previewSession]);
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    const canvas = resultCanvasRef.current;
+    if (!canvas || !resultPath || resultPath.length < 2) return;
+
+    const parent = canvas.parentElement;
+    const rect = parent ? parent.getBoundingClientRect() : null;
+    const size = rect ? Math.max(1, Math.floor(Math.min(rect.width, rect.height))) : 512;
+    canvas.width = size;
+    canvas.height = size;
+
+    return startFourierOneLineAnimation(canvas, resultPath, {
+      samples: 2048,
+      epicycles: 320,
+      outSamples: 1500,
+      fadeAlpha: 0.04,
+      strokeStyle: "#141414",
+      lineWidth: 2.25,
+      coeffsPerSecond: 110,
+      loop: false,
+      autoSeam: true,
+      seamGapFraction: 0.02,
+    });
+  }, [phase, resultPath]);
 
   return (
     <div className="app-root">
@@ -231,9 +255,11 @@ export default function App() {
           </div>
         )}
 
-        {phase === "result" && resultImageUrl && (
+        {phase === "result" && resultPath && (
           <div className="stage__column stage__column--result">
-            <img src={resultImageUrl} alt="One-line face outline" className="stage__result-img" />
+            <div className="circle-viewport circle-viewport--result">
+              <canvas ref={resultCanvasRef} className="circle-viewport__result-canvas" aria-label="Fourier animation" />
+            </div>
             <button type="button" className="btn" onClick={() => void retake()}>
               Retake
             </button>
