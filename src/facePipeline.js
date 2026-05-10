@@ -1074,17 +1074,35 @@ function strokePathSmooth(ctx, path) {
   ctx.lineTo(last[0], last[1]);
 }
 
+/** Axis-aligned bbox of polyline vertices (path is [x,y][]). */
+function bboxFromPathPoints(path) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of path) {
+    minX = Math.min(minX, p[0]);
+    maxX = Math.max(maxX, p[0]);
+    minY = Math.min(minY, p[1]);
+    maxY = Math.max(maxY, p[1]);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
 /**
  * Single continuous “one line” portrait (white background, one stroke).
+ * By default fits the stroke’s bounding box into the canvas and centers it (uniform scale).
  * @param {HTMLCanvasElement} canvas
  * @param {FaceFeature[]} features
- * @param {{ lineWidth?: number, strokeStyle?: string, order?: string[], smooth?: boolean }} [options]
+ * @param {{ lineWidth?: number, strokeStyle?: string, order?: string[], smooth?: boolean, fitAndCenter?: boolean, fitMargin?: number }} [options]
  */
 export function drawOneLineFaceToCanvas(canvas, features, options = {}) {
   const lineWidth = options.lineWidth ?? 2.25;
   const strokeStyle = options.strokeStyle ?? "#141414";
   const order = options.order ?? oneLineOrderForFeatures(features);
   const smooth = options.smooth !== false;
+  const fitAndCenter = options.fitAndCenter !== false;
+  const fitMargin = options.fitMargin ?? 0.92;
 
   const path = chainFeaturesToOnePath(features, order);
   const ctx = canvas.getContext("2d");
@@ -1095,10 +1113,33 @@ export function drawOneLineFaceToCanvas(canvas, features, options = {}) {
   ctx.fillRect(0, 0, W, H);
   if (path.length < 2) return;
 
+  ctx.save();
+  if (fitAndCenter) {
+    const b = bboxFromPathPoints(path);
+    let { minX, minY, maxX, maxY } = b;
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    const inflate = Math.max(lineWidth * 3, Math.max(spanX, spanY, 1) * 0.04, Math.min(W, H) * 0.01);
+    minX -= inflate;
+    maxX += inflate;
+    minY -= inflate;
+    maxY += inflate;
+    const bw = Math.max(maxX - minX, 1e-6);
+    const bh = Math.max(maxY - minY, 1e-6);
+    const cx = (minX + maxX) * 0.5;
+    const cy = (minY + maxY) * 0.5;
+    const scale = Math.min(W / bw, H / bh) * fitMargin;
+    ctx.translate(W * 0.5, H * 0.5);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -cy);
+    ctx.lineWidth = lineWidth / scale;
+  } else {
+    ctx.lineWidth = lineWidth;
+  }
+
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.strokeStyle = strokeStyle;
-  ctx.lineWidth = lineWidth;
   ctx.beginPath();
   if (smooth) strokePathSmooth(ctx, path);
   else {
@@ -1106,4 +1147,5 @@ export function drawOneLineFaceToCanvas(canvas, features, options = {}) {
     for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0], path[i][1]);
   }
   ctx.stroke();
+  ctx.restore();
 }
