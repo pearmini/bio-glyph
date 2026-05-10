@@ -24,6 +24,8 @@ export default function App() {
   const [cameraError, setCameraError] = useState(null);
   const [extractError, setExtractError] = useState(null);
   const [resultImageUrl, setResultImageUrl] = useState(null);
+  /** Last camera frame shown under the generating mask (data URL). */
+  const [generatingFrameUrl, setGeneratingFrameUrl] = useState(null);
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
   const [previewSession, setPreviewSession] = useState(0);
 
@@ -82,6 +84,7 @@ export default function App() {
   const retake = useCallback(async () => {
     stopStream();
     clearOverlay();
+    setGeneratingFrameUrl(null);
     setResultImageUrl(null);
     setExtractError(null);
     setCameraError(null);
@@ -115,6 +118,13 @@ export default function App() {
     ctx.drawImage(video, 0, 0, vw, vh);
     ctx.restore();
 
+    let freezeUrl = null;
+    try {
+      freezeUrl = canvas.toDataURL("image/jpeg", 0.88);
+    } catch {
+      /* ignore */
+    }
+    setGeneratingFrameUrl(freezeUrl);
     stopStream();
     setPhase("generating");
     setCameraError(null);
@@ -125,15 +135,19 @@ export default function App() {
       try {
         const url = overlay?.toDataURL("image/png");
         if (url) {
+          setGeneratingFrameUrl(null);
           setResultImageUrl(url);
           setPhase("result");
         } else {
+          setGeneratingFrameUrl(null);
           void startCamera();
         }
       } catch {
+        setGeneratingFrameUrl(null);
         void startCamera();
       }
     } else {
+      setGeneratingFrameUrl(null);
       void startCamera();
     }
   }, [runOnSource, stopStream, startCamera]);
@@ -194,7 +208,28 @@ export default function App() {
           </div>
         )}
 
-        {phase === "generating" && <p className="stage__generating">Generating…</p>}
+        {phase === "generating" && (
+          <div className="stage__column">
+            <div className="circle-viewport circle-viewport--busy">
+              {generatingFrameUrl ? (
+                <img
+                  src={generatingFrameUrl}
+                  alt=""
+                  className="circle-viewport__freeze circle-viewport__video--mirror"
+                />
+              ) : null}
+              <div className="circle-viewport__mask" aria-hidden />
+              <div className="circle-viewport__spinner-wrap" role="status" aria-live="polite">
+                <span className="circle-viewport__spinner" aria-label="Generating outline" />
+                <span className="circle-viewport__spinner-label">Generating…</span>
+              </div>
+            </div>
+            <p className="stage__tip stage__tip--muted">This may take a moment</p>
+            <button type="button" className="btn btn--primary btn--busy" disabled>
+              Generate
+            </button>
+          </div>
+        )}
 
         {phase === "result" && resultImageUrl && (
           <div className="stage__column stage__column--result">
