@@ -223,7 +223,7 @@ export default function App() {
       fadeAlpha: 0.04,
       strokeStyle: "#141414",
       lineWidth: 2.25,
-      coeffsPerSecond: 110,
+      coeffsPerSecond: 82,
       loop: false,
       autoSeam: true,
       seamGapFraction: 0.02,
