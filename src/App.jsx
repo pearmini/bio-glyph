@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  drawOneLineFaceToCanvas,
+  drawOneLinePathToCanvas,
   extractFaceFeaturesFromImage,
-  buildOneLinePath,
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
@@ -189,13 +188,11 @@ export default function App() {
       syncOverlaySize(sourceEl, overlay, null);
       const extracted = await extractFaceFeaturesFromImage(sourceEl);
       if (extracted.ok) {
-        // Keep the original static draw as a fallback/offscreen render,
-        // but prefer the path for Fourier animation in the result stage.
-        drawOneLineFaceToCanvas(overlay, extracted.features);
-        const path = buildOneLinePath(extracted.features);
-        setResultPath(path);
+        // Static overlay + Fourier use the same merged path (single or multi-face, left → right).
+        drawOneLinePathToCanvas(overlay, extracted.mergedPath);
+        setResultPath(extracted.mergedPath);
         setExtractError(null);
-        return path;
+        return extracted.mergedPath;
       }
       clearOverlay();
       setExtractError(extracted.message);
@@ -558,7 +555,7 @@ export default function App() {
                     autoPlay
                   />
                 </div>
-                <p className="stage__tip">Place your face in the circle</p>
+                <p className="stage__tip">Place your face or faces in the circle</p>
                 <button type="button" className="btn btn--dark" onClick={() => void generate()}>
                   Generate
                 </button>
