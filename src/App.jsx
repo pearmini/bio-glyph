@@ -468,7 +468,7 @@ export default function App() {
         {phase === "idle" && (
           <button
             type="button"
-            className="btn btn--primary"
+            className="btn btn--dark"
             onClick={() => {
               setExtractError(null);
               void startCamera();
