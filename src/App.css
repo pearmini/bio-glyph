@@ -49,6 +49,25 @@
   user-select: none;
 }
 
+.app-brand--button {
+  appearance: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.app-brand--button:hover {
+  opacity: 0.85;
+}
+
+.app-brand--button:focus-visible {
+  outline: 2px solid rgba(25, 118, 210, 0.55);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
 .app-fullscreen-btn {
   display: inline-flex;
   align-items: center;
@@ -81,6 +100,14 @@
   gap: 1rem;
 }
 
+.stage--preview {
+  padding: 0;
+}
+
+.stage--preview .preview-stage {
+  overflow: hidden;
+}
+
 .preview-stage {
   position: relative;
   width: 100%;
@@ -103,14 +130,12 @@
 
 .bubble-band {
   position: relative;
-  flex: 0 0 clamp(10.5rem, 34vmin, 15rem);
+  flex: 1 1 0;
   pointer-events: none;
 }
 
 .bubble-band-spacer {
-  flex: 1 1 auto;
-  min-height: 0;
-  pointer-events: none;
+  display: none;
 }
 
 .history-bubble-anchor {

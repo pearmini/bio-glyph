@@ -449,10 +449,22 @@ export default function App() {
     }
   }, []);
 
+  const goToGeneratePage = useCallback(() => {
+    setExtractError(null);
+    if (phase === "preview") return;
+    if (phase === "idle") {
+      void startCamera();
+      return;
+    }
+    void retake();
+  }, [phase, retake, startCamera]);
+
   return (
     <div ref={appRootRef} className="app-root">
       <div className="app-top-bar">
-        <span className="app-brand">BioGlyph</span>
+        <button type="button" className="app-brand app-brand--button" onClick={goToGeneratePage}>
+          BioGlyph
+        </button>
         {!isFullscreen ? (
           <button
             type="button"
@@ -464,11 +476,11 @@ export default function App() {
           </button>
         ) : null}
       </div>
-      <main className="stage">
+      <main className={`stage stage--${phase}`}>
         {phase === "idle" && (
           <button
             type="button"
-            className="btn btn--primary"
+            className="btn btn--dark"
             onClick={() => {
               setExtractError(null);
               void startCamera();
