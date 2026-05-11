@@ -51,15 +51,18 @@
 
 .app-brand--button {
   appearance: none;
-  border: none;
-  padding: 0;
-  background: transparent;
+  border: 1px solid #e5e5e5;
+  padding: 0.45rem 0.85rem;
+  background: #fff;
+  border-radius: 10px;
   cursor: pointer;
   line-height: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .app-brand--button:hover {
-  opacity: 0.85;
+  background: #f7f7f7;
+  border-color: #d8d8d8;
 }
 
 .app-brand--button:focus-visible {
@@ -122,25 +125,19 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  display: flex;
-  flex-direction: column;
   pointer-events: none;
   overflow: hidden;
 }
 
-.bubble-band {
-  position: relative;
-  flex: 1 1 0;
+.bubble-field__anchors {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
-}
-
-.bubble-band-spacer {
-  display: none;
 }
 
 .history-bubble-anchor {
   position: absolute;
-  z-index: 0;
+  z-index: 1;
   transform: translate(-50%, -50%);
   padding: 0;
   border: none;
@@ -156,7 +153,8 @@
 
 .history-bubble-anchor:hover,
 .history-bubble-anchor:focus-visible {
-  z-index: 4;
+  /* Above any recency-based stack order (see inline z-index on anchors). */
+  z-index: 1000;
 }
 
 @keyframes bubble-drift {
@@ -336,6 +334,15 @@
   flex-shrink: 0;
 }
 
+/* Lift camera / freeze frame above bubble field: ring + depth (not result canvas). */
+.circle-viewport:not(.circle-viewport--result) {
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.92),
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.14),
+    0 24px 56px rgba(0, 0, 0, 0.12);
+}
+
 .circle-viewport__freeze {
   position: absolute;
   inset: 0;
@@ -368,10 +375,17 @@
 
 .stage__tip {
   margin: 0;
-  font-size: 0.95rem;
-  color: #444;
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #333;
   text-align: center;
-  max-width: 18rem;
+  max-width: 22rem;
+  padding: 0.65rem 1.1rem;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 /* (Static result image removed; result uses a canvas animation.) */
@@ -447,6 +461,27 @@
 .btn--dark:hover:not(:disabled) {
   background: #2a2a2a;
   border-color: #2a2a2a;
+}
+
+/* Generate (and busy Generate) over bubble field: reads as a solid card vs white circles. */
+.stage--preview .btn--dark,
+.stage--generating .btn--dark {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.35),
+    0 3px 10px rgba(0, 0, 0, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.18);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.stage--preview .btn--dark:hover:not(:disabled),
+.stage--generating .btn--dark:hover:not(:disabled) {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.14),
+    0 16px 40px rgba(0, 0, 0, 0.22);
 }
 
 .btn--dark:disabled,

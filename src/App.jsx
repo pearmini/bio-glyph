@@ -86,6 +86,32 @@ function bubbleLayoutForId(id) {
   };
 }
 
+/**
+ * Map band-local anchor % to full bubble-field % (same vertical split as the old
+ * two flex rows: top band uses the upper half, bottom band the lower half).
+ */
+function bubbleFieldAnchorStyle(layout) {
+  const rawTop = layout.anchor.top;
+  const topPct = typeof rawTop === "string" ? parseFloat(rawTop) : Number(rawTop);
+  const safe = Number.isFinite(topPct) ? topPct : 0;
+  const top = layout.topBand ? `${safe * 0.5}%` : `${50 + safe * 0.5}%`;
+  return { left: layout.anchor.left, top };
+}
+
+/** Newer generations get a higher z-index so they paint above older bubbles. */
+function bubbleStackZById(generations) {
+  if (!generations.length) return new Map();
+  const sorted = [...generations].sort((a, b) => {
+    if (b.createdAt !== a.createdAt) return b.createdAt - a.createdAt;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  const map = new Map();
+  for (let i = 0; i < sorted.length; i++) {
+    map.set(sorted[i].id, sorted.length - i);
+  }
+  return map;
+}
+
 function getActiveFullscreenElement() {
   return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
 }
@@ -511,35 +537,32 @@ export default function App() {
             {savedGenerations.length > 0 ? (
               <div className="bubble-field" aria-hidden>
                 {(() => {
+                  const stackZById = bubbleStackZById(savedGenerations);
                   const rows = savedGenerations.map((g) => ({
                     g,
                     layout: bubbleLayoutForId(g.id),
+                    stackZ: stackZById.get(g.id) ?? 1,
                   }));
-                  const renderBand = (list) =>
-                    list.map(({ g, layout }) => (
-                      <button
-                        key={g.id}
-                        type="button"
-                        className="history-bubble-anchor"
-                        style={layout.anchor}
-                        onClick={() => openSavedGeneration(g)}
-                        aria-label="Open saved generation"
-                      >
-                        <span className="history-bubble" style={layout.disc}>
-                          <HistoryBubbleFace path={g.path} />
-                        </span>
-                      </button>
-                    ));
                   return (
-                    <>
-                      <div className="bubble-band bubble-band--top">
-                        {renderBand(rows.filter((r) => r.layout.topBand))}
-                      </div>
-                      <div className="bubble-band-spacer" />
-                      <div className="bubble-band bubble-band--bottom">
-                        {renderBand(rows.filter((r) => !r.layout.topBand))}
-                      </div>
-                    </>
+                    <div className="bubble-field__anchors">
+                      {rows.map(({ g, layout, stackZ }) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          className="history-bubble-anchor"
+                          style={{
+                            ...bubbleFieldAnchorStyle(layout),
+                            zIndex: stackZ,
+                          }}
+                          onClick={() => openSavedGeneration(g)}
+                          aria-label="Open saved generation"
+                        >
+                          <span className="history-bubble" style={layout.disc}>
+                            <HistoryBubbleFace path={g.path} />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   );
                 })()}
               </div>
