@@ -401,7 +401,7 @@ export default function App() {
             if (ac.signal.aborted) return;
             if (e instanceof DOMException && e.name === "AbortError") return;
             setSharePhase("error");
-            setShareError(e instanceof Error ? e.message : "Share failed.");
+            setShareError(e instanceof Error ? e.message : "Download failed.");
           }
         },
         "image/png",
@@ -626,7 +626,7 @@ export default function App() {
               </div>
               <div className="result-actions__row">
                 <button type="button" className="btn" onClick={openShareModal}>
-                  Share
+                  Download to your phone
                 </button>
                 <button type="button" className="btn" onClick={() => void retake()}>
                   Back
@@ -656,13 +656,13 @@ export default function App() {
           <button
             type="button"
             className="share-modal__backdrop"
-            aria-label="Close share dialog"
+            aria-label="Close download dialog"
             onClick={closeShareModal}
           />
           <div className="share-modal__panel">
             <div className="share-modal__header">
               <h2 id="share-modal-title" className="share-modal__title">
-                Share
+                Download to your phone
               </h2>
               <button
                 type="button"
