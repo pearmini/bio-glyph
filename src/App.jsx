@@ -6,7 +6,7 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
-import { Maximize2, X } from "lucide-react";
+import { Maximize2, Play, X } from "lucide-react";
 import QRCode from "qrcode";
 import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
 import { addGeneration, loadGenerations, pathToBubbleSvg } from "./generationStorage.js";
@@ -573,11 +573,13 @@ export default function App() {
             <div className="stage__result-actions">
               <button
                 type="button"
-                className="btn"
+                className="btn btn--icon btn--icon-dark"
                 disabled={resultAnimPlaying}
                 onClick={replayResultAnimation}
+                aria-label="Replay"
+                title="Replay"
               >
-                Replay
+                <Play size={18} strokeWidth={2.4} aria-hidden />
               </button>
               <button type="button" className="btn" onClick={openShareModal}>
                 Share

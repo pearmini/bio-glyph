@@ -310,10 +310,40 @@
   border: 1px solid #ccc;
   background: #fff;
   cursor: pointer;
+  color: #141414;
 }
 
 .btn:hover {
   background: #f3f3f3;
+}
+
+.btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  aspect-ratio: 1 / 1;
+}
+
+.btn--icon svg {
+  display: block;
+}
+
+.btn--icon-dark {
+  background: #141414;
+  border-color: #141414;
+  color: #fff;
+}
+
+.btn--icon-dark:hover:not(:disabled) {
+  background: #2a2a2a;
+  border-color: #2a2a2a;
+}
+
+.btn--icon-dark:disabled {
+  background: #141414;
+  border-color: #141414;
+  color: #fff;
 }
 
 .btn--primary {
