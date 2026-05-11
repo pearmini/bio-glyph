@@ -476,7 +476,7 @@ export default function App() {
           </button>
         ) : null}
       </div>
-      <main className="stage">
+      <main className={`stage stage--${phase}`}>
         {phase === "idle" && (
           <button
             type="button"

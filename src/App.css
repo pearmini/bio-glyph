@@ -100,6 +100,14 @@
   gap: 1rem;
 }
 
+.stage--preview {
+  padding: 0;
+}
+
+.stage--preview .preview-stage {
+  overflow: hidden;
+}
+
 .preview-stage {
   position: relative;
   width: 100%;
@@ -122,14 +130,12 @@
 
 .bubble-band {
   position: relative;
-  flex: 0 0 clamp(10.5rem, 34vmin, 15rem);
+  flex: 1 1 0;
   pointer-events: none;
 }
 
 .bubble-band-spacer {
-  flex: 1 1 auto;
-  min-height: 0;
-  pointer-events: none;
+  display: none;
 }
 
 .history-bubble-anchor {
