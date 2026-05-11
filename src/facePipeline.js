@@ -6,6 +6,9 @@ const FACE_MODEL =
 const SEG_MODEL =
   "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite";
 
+/** FaceLandmarker returns up to this many faces; paths merge left → right with straight bridges. */
+const MAX_DETECTED_FACES = 4;
+
 let loadPromise = null;
 
 /**
@@ -16,11 +19,10 @@ function ensureMediaPipeModels() {
   if (!loadPromise) {
     loadPromise = (async () => {
       const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
-      /** Only one face result: MediaPipe's strongest / dominant face when several appear in frame. */
       const faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: FACE_MODEL, delegate: "CPU" },
         runningMode: "IMAGE",
-        numFaces: 1,
+        numFaces: MAX_DETECTED_FACES,
       });
       const imageSegmenter = await ImageSegmenter.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: SEG_MODEL, delegate: "CPU" },
@@ -782,52 +784,31 @@ function restrictSegmentationMaskToRoi(u8, mw, mh, bounds) {
 
 /** @typedef {{ id: string, points: number[][], closed: boolean }} FaceFeature */
 
+/** Mean x (image px) along the face oval — stable left-to-right sort for multi-face merging. */
+function faceLandmarkSortKeyX(lm, FL, iw) {
+  const idx = orderedFaceOvalIndices(FL.FACE_LANDMARKS_FACE_OVAL);
+  let sx = 0,
+    n = 0;
+  for (const i of idx) {
+    const p = lm[i];
+    if (!p) continue;
+    sx += p.x * iw;
+    n++;
+  }
+  return n ? sx / n : 0;
+}
+
 /**
- * Loads MediaPipe models on first call (then caches), runs face + segmenter, returns feature outlines
- * in **source pixel space** (image natural size, video frame, or canvas bitmap).
- * Single-face policy: FaceLandmarker uses `numFaces: 1`; segmentation labels outside that face’s ROI are cleared
- * so hair/ears match the same subject (ImageSegmenter has no built-in face count).
- *
- * @param {HTMLImageElement | HTMLVideoElement | HTMLCanvasElement} sourceEl
- * @returns {Promise<{ ok: true, features: FaceFeature[], imageWidth: number, imageHeight: number } | { ok: false, message: string }>}
+ * One subject’s feature outlines from landmarks + optional segmentation (mask already ROI-restricted).
+ * @param {unknown} lm
+ * @param {typeof FaceLandmarker} FL
+ * @param {Uint8Array | null} segU8
  */
-export async function extractFaceFeaturesFromImage(sourceEl) {
-  if (!isFaceSourceReady(sourceEl)) return { ok: false, message: "Image not ready." };
-
-  let faceLandmarker, imageSegmenter, FaceLandmarkerClass;
-  try {
-    ({ faceLandmarker, imageSegmenter, FaceLandmarker: FaceLandmarkerClass } = await ensureMediaPipeModels());
-  } catch (e) {
-    const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
-    return { ok: false, message: "Failed to load models: " + msg };
-  }
-
-  const { width: iw, height: ih } = getIntrinsicDimensions(sourceEl);
-
-  const faceRes = faceLandmarker.detect(sourceEl);
-  const segRes = imageSegmenter.segment(sourceEl);
-
-  const landmarks = faceRes.faceLandmarks ?? [];
-  if (landmarks.length === 0) {
-    return { ok: false, message: "No face detected." };
-  }
-
-  const lm = landmarks[0];
-  const FL = FaceLandmarkerClass;
+function buildFaceFeaturesForLandmarks(lm, FL, segU8, segMw, segMh, iw, ih) {
   /** @type {FaceFeature[]} */
   const features = [];
 
-  let segU8 = null,
-    segMw = 0,
-    segMh = 0;
-  if (segRes.categoryMask) {
-    const cm = segRes.categoryMask;
-    segMw = cm.width;
-    segMh = cm.height;
-    segU8 = new Uint8Array(cm.getAsUint8Array());
-    const roi = primaryFaceRoiMaskBounds(lm, FL.FACE_LANDMARKS_FACE_OVAL, segMw, segMh);
-    segU8 = restrictSegmentationMaskToRoi(segU8, segMw, segMh, roi);
-
+  if (segU8) {
     const hairRing = hairOutlineRingMaskSpace(segU8, segMw, segMh);
     const hairPx = maskRingToImagePixels(hairRing, segMw, segMh, iw, ih);
     if (hairPx.length >= 3) {
@@ -909,7 +890,74 @@ export async function extractFaceFeaturesFromImage(sourceEl) {
     });
   }
 
-  return { ok: true, features, imageWidth: iw, imageHeight: ih };
+  return features;
+}
+
+/**
+ * Loads MediaPipe models on first call (then caches), runs face + segmenter, returns feature outlines
+ * in **source pixel space** (image natural size, video frame, or canvas bitmap).
+ * Up to {@link MAX_DETECTED_FACES} faces; each uses segmentation restricted to that face’s ROI, then
+ * one-line paths are concatenated in **left-to-right** order (implicit straight bridges between faces).
+ *
+ * @param {HTMLImageElement | HTMLVideoElement | HTMLCanvasElement} sourceEl
+ * @returns {Promise<{ ok: true, mergedPath: number[][], features: FaceFeature[], faceCount: number, imageWidth: number, imageHeight: number } | { ok: false, message: string }>}
+ */
+export async function extractFaceFeaturesFromImage(sourceEl) {
+  if (!isFaceSourceReady(sourceEl)) return { ok: false, message: "Image not ready." };
+
+  let faceLandmarker, imageSegmenter, FaceLandmarkerClass;
+  try {
+    ({ faceLandmarker, imageSegmenter, FaceLandmarker: FaceLandmarkerClass } = await ensureMediaPipeModels());
+  } catch (e) {
+    const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
+    return { ok: false, message: "Failed to load models: " + msg };
+  }
+
+  const { width: iw, height: ih } = getIntrinsicDimensions(sourceEl);
+
+  const faceRes = faceLandmarker.detect(sourceEl);
+  const segRes = imageSegmenter.segment(sourceEl);
+
+  const landmarks = faceRes.faceLandmarks ?? [];
+  if (landmarks.length === 0) {
+    return { ok: false, message: "No face detected." };
+  }
+
+  const FL = FaceLandmarkerClass;
+  let segU8Full = null,
+    segMw = 0,
+    segMh = 0;
+  if (segRes.categoryMask) {
+    const cm = segRes.categoryMask;
+    segMw = cm.width;
+    segMh = cm.height;
+    segU8Full = new Uint8Array(cm.getAsUint8Array());
+  }
+
+  const faces = landmarks.map((lm) => {
+    let segU8 = null;
+    if (segU8Full) {
+      segU8 = new Uint8Array(segU8Full);
+      const roi = primaryFaceRoiMaskBounds(lm, FL.FACE_LANDMARKS_FACE_OVAL, segMw, segMh);
+      segU8 = restrictSegmentationMaskToRoi(segU8, segMw, segMh, roi);
+    }
+    const features = buildFaceFeaturesForLandmarks(lm, FL, segU8, segMw, segMh, iw, ih);
+    return { lm, features };
+  });
+
+  faces.sort((a, b) => faceLandmarkSortKeyX(a.lm, FL, iw) - faceLandmarkSortKeyX(b.lm, FL, iw));
+
+  const perFacePaths = faces.map((f) => buildOneLinePath(f.features));
+  const mergedPath = mergeOneLinePaths(perFacePaths);
+
+  return {
+    ok: true,
+    mergedPath,
+    features: faces[0].features,
+    faceCount: faces.length,
+    imageWidth: iw,
+    imageHeight: ih,
+  };
 }
 
 /** No hair: full landmark face oval only (no ears in stroke). */
@@ -1122,6 +1170,25 @@ export function buildOneLinePath(features, order) {
   return chainFeaturesToOnePath(features, order ?? oneLineOrderForFeatures(features));
 }
 
+/**
+ * Concatenate per-face polylines in order; dedupe vertices at joins (implicit straight bridges).
+ * @param {number[][][]} paths
+ * @returns {number[][]}
+ */
+export function mergeOneLinePaths(paths) {
+  const eps2 = 0.15 * 0.15;
+  /** @type {number[][]} */
+  const out = [];
+  for (const path of paths) {
+    if (!path || path.length < 2) continue;
+    for (const p of path) {
+      if (out.length && dist2Pt(out[out.length - 1], p) <= eps2) continue;
+      out.push([p[0], p[1]]);
+    }
+  }
+  return out;
+}
+
 function strokePathSmooth(ctx, path) {
   if (path.length < 2) return;
   if (path.length === 2) {
@@ -1155,21 +1222,18 @@ function bboxFromPathPoints(path) {
 }
 
 /**
- * Single continuous “one line” portrait (white background, one stroke).
- * By default fits the stroke’s bounding box into the canvas and centers it (uniform scale).
+ * Stroke one polyline in image space (white background, optional fit/center).
  * @param {HTMLCanvasElement} canvas
- * @param {FaceFeature[]} features
- * @param {{ lineWidth?: number, strokeStyle?: string, order?: string[], smooth?: boolean, fitAndCenter?: boolean, fitMargin?: number }} [options]
+ * @param {number[][]} path
+ * @param {{ lineWidth?: number, strokeStyle?: string, smooth?: boolean, fitAndCenter?: boolean, fitMargin?: number }} [options]
  */
-export function drawOneLineFaceToCanvas(canvas, features, options = {}) {
+export function drawOneLinePathToCanvas(canvas, path, options = {}) {
   const lineWidth = options.lineWidth ?? 2.25;
   const strokeStyle = options.strokeStyle ?? "#141414";
-  const order = options.order ?? oneLineOrderForFeatures(features);
   const smooth = options.smooth !== false;
   const fitAndCenter = options.fitAndCenter !== false;
   const fitMargin = options.fitMargin ?? 0.92;
 
-  const path = chainFeaturesToOnePath(features, order);
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const W = canvas.width;
@@ -1213,4 +1277,17 @@ export function drawOneLineFaceToCanvas(canvas, features, options = {}) {
   }
   ctx.stroke();
   ctx.restore();
+}
+
+/**
+ * Single continuous “one line” portrait (white background, one stroke).
+ * By default fits the stroke’s bounding box into the canvas and centers it (uniform scale).
+ * @param {HTMLCanvasElement} canvas
+ * @param {FaceFeature[]} features
+ * @param {{ lineWidth?: number, strokeStyle?: string, order?: string[], smooth?: boolean, fitAndCenter?: boolean, fitMargin?: number }} [options]
+ */
+export function drawOneLineFaceToCanvas(canvas, features, options = {}) {
+  const order = options.order ?? oneLineOrderForFeatures(features);
+  const path = chainFeaturesToOnePath(features, order);
+  drawOneLinePathToCanvas(canvas, path, options);
 }
