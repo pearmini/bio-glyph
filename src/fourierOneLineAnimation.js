@@ -155,6 +155,7 @@ function findLargestWrapJumpIndex(pts) {
  * @param {{
  *  samples?: number,
  *  epicycles?: number,
+ *  fixedM?: number,
  *  outSamples?: number,
  *  fadeAlpha?: number,
  *  strokeStyle?: string,
@@ -165,6 +166,7 @@ function findLargestWrapJumpIndex(pts) {
  *  seamGapFraction?: number,
  *  autoSeam?: boolean,
  *  onComplete?: () => void,
+ *  onM?: (m: number) => void,
  *  devicePixelRatio?: number,
  *  maxDevicePixelRatio?: number,
  * }} [opts]
@@ -201,6 +203,8 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
 
   const samples = clamp(opts.samples ?? 2048, 256, 8192);
   const M = clamp(opts.epicycles ?? 300, 16, 800);
+  const fixedM =
+    Number.isFinite(opts.fixedM) ? clamp(Math.floor(opts.fixedM), 0, M) : null;
   const q = clamp(opts.outSamples ?? 1400, 256, 4000);
   const fadeAlpha = clamp(opts.fadeAlpha ?? 0.04, 0, 1);
   const strokeStyle = opts.strokeStyle ?? "#141414";
@@ -235,12 +239,16 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
   ctx.lineJoin = "round";
 
   const drawFrame = (tMs) => {
-    if (!startT) startT = tMs;
-    const elapsed = (tMs - startT) / 1000;
+    let m = fixedM;
+    if (m === null) {
+      if (!startT) startT = tMs;
+      const elapsed = (tMs - startT) / 1000;
+      m = Math.floor(elapsed * coeffsPerSecond);
+      if (loop) m = m % (M + 1);
+      else m = clamp(m, 0, M);
+    }
 
-    let m = Math.floor(elapsed * coeffsPerSecond);
-    if (loop) m = m % (M + 1);
-    else m = clamp(m, 0, M);
+    if (typeof opts.onM === "function") opts.onM(m);
 
     // Slight trailing effect like the Observable reference.
     ctx.save();
@@ -268,6 +276,12 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
     ctx.stroke();
     ctx.restore();
 
+    if (fixedM !== null) {
+      raf = 0;
+      if (!cancelled && typeof opts.onComplete === "function") opts.onComplete();
+      return;
+    }
+
     if (loop || m < M) raf = requestAnimationFrame(drawFrame);
     else {
       raf = 0;
@@ -278,7 +292,12 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
   // Initialize background so the first fade doesn't start from transparent.
   ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, cssW, cssH);
-  raf = requestAnimationFrame(drawFrame);
+  if (fixedM !== null) {
+    drawFrame(0);
+  } else {
+    if (typeof opts.onM === "function") opts.onM(0);
+    raf = requestAnimationFrame(drawFrame);
+  }
 
   return () => {
     cancelled = true;

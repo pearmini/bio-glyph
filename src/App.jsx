@@ -16,6 +16,9 @@ const VIDEO_CONSTRAINTS = {
   audio: false,
 };
 
+/** Max Fourier terms used in the result animation (must match `epicycles` passed to the animator). */
+const RESULT_EPICYCLES = 320;
+
 /** Extra time on the generating screen after capture before analysis runs. */
 const GENERATING_HOLD_MS = 1000;
 
@@ -130,6 +133,14 @@ export default function App() {
   const [resultAnimPlaying, setResultAnimPlaying] = useState(false);
   /** Increment to restart the result animation with the same path. */
   const [resultReplayKey, setResultReplayKey] = useState(0);
+  /** If set, render a static Fourier frame using exactly this many coefficients (m). */
+  const [resultFixedM, setResultFixedM] = useState(null);
+  /** Coefficient count shown on the slider / label (synced with animation frames when playing). */
+  const [resultDisplayM, setResultDisplayM] = useState(RESULT_EPICYCLES);
+
+  const onAnimM = useCallback((m) => {
+    setResultDisplayM(m);
+  }, []);
 
   /** @type {[AppPhase, React.Dispatch<React.SetStateAction<AppPhase>>]} */
   const [phase, setPhase] = useState("idle");
@@ -213,6 +224,8 @@ export default function App() {
     setGeneratingFrameUrl(null);
     setResultPath(null);
     setResultReplayKey(0);
+    setResultFixedM(null);
+    setResultDisplayM(RESULT_EPICYCLES);
     setExtractError(null);
     setCameraError(null);
     setPhase("preview");
@@ -301,9 +314,12 @@ export default function App() {
   }, [phase]);
 
   const replayResultAnimation = useCallback(() => {
+    const mAtClick = resultFixedM ?? resultDisplayM;
+    setResultDisplayM(mAtClick);
+    setResultFixedM(null);
     setResultAnimPlaying(true);
     setResultReplayKey((n) => n + 1);
-  }, []);
+  }, [resultFixedM, resultDisplayM]);
 
   const openSavedGeneration = useCallback(
     (record) => {
@@ -312,6 +328,7 @@ export default function App() {
       setGeneratingFrameUrl(null);
       setExtractError(null);
       setCameraError(null);
+      setResultFixedM(null);
       setResultPath(record.path);
       setResultReplayKey((n) => n + 1);
       setResultAnimPlaying(true);
@@ -411,7 +428,8 @@ export default function App() {
 
     return startFourierOneLineAnimation(canvas, resultPath, {
       samples: 2048,
-      epicycles: 320,
+      epicycles: RESULT_EPICYCLES,
+      fixedM: resultFixedM,
       outSamples: 1500,
       fadeAlpha: 0.04,
       strokeStyle: "#141414",
@@ -420,9 +438,10 @@ export default function App() {
       loop: false,
       autoSeam: true,
       seamGapFraction: 0.02,
+      onM: onAnimM,
       onComplete: () => setResultAnimPlaying(false),
     });
-  }, [phase, resultPath, resultReplayKey]);
+  }, [phase, resultPath, resultReplayKey, resultFixedM, onAnimM]);
 
   useEffect(() => {
     const sync = () => {
@@ -571,22 +590,48 @@ export default function App() {
               <canvas ref={resultCanvasRef} className="circle-viewport__result-canvas" aria-label="Fourier animation" />
             </div>
             <div className="stage__result-actions">
-              <button
-                type="button"
-                className="btn btn--icon btn--icon-dark"
-                disabled={resultAnimPlaying}
-                onClick={replayResultAnimation}
-                aria-label="Replay"
-                title="Replay"
-              >
-                <Play size={18} strokeWidth={2.4} aria-hidden />
-              </button>
-              <button type="button" className="btn" onClick={openShareModal}>
-                Share
-              </button>
-              <button type="button" className="btn" onClick={() => void retake()}>
-                Back
-              </button>
+              <div className="result-actions__row">
+                <div className="result-controls">
+                  <button
+                    type="button"
+                    className="btn btn--icon btn--icon-dark"
+                    disabled={resultAnimPlaying}
+                    onClick={replayResultAnimation}
+                    aria-label="Replay"
+                    title="Replay"
+                  >
+                    <Play size={18} strokeWidth={2.4} aria-hidden />
+                  </button>
+                  <label className="result-m" aria-label="Detail slider">
+                    <input
+                      type="range"
+                      className="result-m__slider"
+                      min={0}
+                      max={RESULT_EPICYCLES}
+                      step={1}
+                      value={Math.max(0, Math.min(RESULT_EPICYCLES, resultDisplayM))}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setResultAnimPlaying(false);
+                        setResultFixedM(next);
+                        setResultDisplayM(next);
+                        setResultReplayKey((n) => n + 1);
+                      }}
+                    />
+                  <span className="result-m__value" aria-hidden>
+                    Detail: {Math.max(0, Math.min(RESULT_EPICYCLES, resultDisplayM))}
+                  </span>
+                  </label>
+                </div>
+              </div>
+              <div className="result-actions__row">
+                <button type="button" className="btn" onClick={openShareModal}>
+                  Share
+                </button>
+                <button type="button" className="btn" onClick={() => void retake()}>
+                  Back
+                </button>
+              </div>
             </div>
           </div>
         )}
