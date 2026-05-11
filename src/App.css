@@ -125,25 +125,19 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  display: flex;
-  flex-direction: column;
   pointer-events: none;
   overflow: hidden;
 }
 
-.bubble-band {
-  position: relative;
-  flex: 1 1 0;
+.bubble-field__anchors {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
-}
-
-.bubble-band-spacer {
-  display: none;
 }
 
 .history-bubble-anchor {
   position: absolute;
-  z-index: 0;
+  z-index: 1;
   transform: translate(-50%, -50%);
   padding: 0;
   border: none;
@@ -159,7 +153,8 @@
 
 .history-bubble-anchor:hover,
 .history-bubble-anchor:focus-visible {
-  z-index: 4;
+  /* Above any recency-based stack order (see inline z-index on anchors). */
+  z-index: 1000;
 }
 
 @keyframes bubble-drift {
