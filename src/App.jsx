@@ -5,7 +5,7 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
-import { Maximize2, Play, X } from "lucide-react";
+import { Download, Maximize2, Play, X } from "lucide-react";
 import QRCode from "qrcode";
 import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
 import { addGeneration, loadGenerations, pathToBubbleSvg } from "./generationStorage.js";
@@ -116,6 +116,44 @@ function getActiveFullscreenElement() {
   return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
 }
 
+function isDebugQueryEnabled() {
+  try {
+    return new URLSearchParams(window.location.search).get("debug") === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** Snapshot of all origin localStorage keys; values are parsed JSON when valid, else raw strings. */
+function snapshotLocalStorageForExport() {
+  const out = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key == null) continue;
+    const raw = localStorage.getItem(key);
+    if (raw == null) continue;
+    try {
+      out[key] = JSON.parse(raw);
+    } catch {
+      out[key] = raw;
+    }
+  }
+  return out;
+}
+
+function downloadJsonFile(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 const LITTERBOX_UPLOAD =
   "https://litterbox.catbox.moe/resources/internals/api.php";
 
@@ -154,6 +192,7 @@ export default function App() {
   const resultCanvasRef = useRef(null);
   const streamRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [debugExportEnabled, setDebugExportEnabled] = useState(() => isDebugQueryEnabled());
   /** Fourier result animation: false when finished, true while coeffs are animating. */
   const [resultAnimPlaying, setResultAnimPlaying] = useState(false);
   /** Increment to restart the result animation with the same path. */
@@ -480,6 +519,12 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const onPopState = () => setDebugExportEnabled(isDebugQueryEnabled());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const enterFullscreen = useCallback(async () => {
     const el = appRootRef.current;
     if (!el) return;
@@ -489,6 +534,11 @@ export default function App() {
     } catch {
       /* blocked or unsupported */
     }
+  }, []);
+
+  const downloadLocalStorageJson = useCallback(() => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadJsonFile(`bioglyph-localstorage-${stamp}.json`, snapshotLocalStorageForExport());
   }, []);
 
   const goToGeneratePage = useCallback(() => {
@@ -507,16 +557,29 @@ export default function App() {
         <button type="button" className="app-brand app-brand--button" onClick={goToGeneratePage}>
           BioGlyph
         </button>
-        {!isFullscreen ? (
-          <button
-            type="button"
-            className="app-fullscreen-btn"
-            aria-label="Enter full screen"
-            onClick={() => void enterFullscreen()}
-          >
-            <Maximize2 size={18} strokeWidth={2} aria-hidden />
-          </button>
-        ) : null}
+        <div className="app-top-bar-actions">
+          {debugExportEnabled ? (
+            <button
+              type="button"
+              className="app-debug-download-btn"
+              aria-label="Download localStorage as JSON"
+              title="Download localStorage (debug)"
+              onClick={downloadLocalStorageJson}
+            >
+              <Download size={18} strokeWidth={2} aria-hidden />
+            </button>
+          ) : null}
+          {!isFullscreen ? (
+            <button
+              type="button"
+              className="app-fullscreen-btn"
+              aria-label="Enter full screen"
+              onClick={() => void enterFullscreen()}
+            >
+              <Maximize2 size={18} strokeWidth={2} aria-hidden />
+            </button>
+          ) : null}
+        </div>
       </div>
       <main className={`stage stage--${phase}`}>
         {phase === "idle" && (
