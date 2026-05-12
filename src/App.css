@@ -71,6 +71,12 @@
   border-radius: 6px;
 }
 
+.app-top-bar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .app-fullscreen-btn {
   display: inline-flex;
   align-items: center;
@@ -88,6 +94,27 @@
 }
 
 .app-fullscreen-btn:hover {
+  background: #f5f5f5;
+  border-color: #b0b0b0;
+}
+
+.app-debug-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border-radius: 6px;
+  border: 1px solid #c5c5c5;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.app-debug-download-btn svg {
+  display: block;
+}
+
+.app-debug-download-btn:hover {
   background: #f5f5f5;
   border-color: #b0b0b0;
 }
