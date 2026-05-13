@@ -79,16 +79,3 @@ export function loadGenerations() {
   return generationsFromBundled(bundledGenerations);
 }
 
-/**
- * @param {number[][]} path
- * @returns {{ id: string, createdAt: number, path: number[][] } | null}
- */
-export function addGeneration(path) {
-  if (!path || path.length < 2) return null;
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  return {
-    id,
-    createdAt: Date.now(),
-    path,
-  };
-}

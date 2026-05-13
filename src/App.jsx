@@ -5,10 +5,10 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
-import { Download, Play, X } from "lucide-react";
+import { Play, X } from "lucide-react";
 import QRCode from "qrcode";
 import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
-import { addGeneration, loadGenerations, pathToBubbleSvg } from "./generationStorage.js";
+import { loadGenerations, pathToBubbleSvg } from "./generationStorage.js";
 
 const VIDEO_CONSTRAINTS = {
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -112,44 +112,6 @@ function bubbleStackZById(generations) {
   return map;
 }
 
-function isDebugQueryEnabled() {
-  try {
-    return new URLSearchParams(window.location.search).get("debug") === "true";
-  } catch {
-    return false;
-  }
-}
-
-/** Snapshot of all origin localStorage keys; values are parsed JSON when valid, else raw strings. */
-function snapshotLocalStorageForExport() {
-  const out = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key == null) continue;
-    const raw = localStorage.getItem(key);
-    if (raw == null) continue;
-    try {
-      out[key] = JSON.parse(raw);
-    } catch {
-      out[key] = raw;
-    }
-  }
-  return out;
-}
-
-function downloadJsonFile(filename, data) {
-  const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 const LITTERBOX_UPLOAD =
   "https://litterbox.catbox.moe/resources/internals/api.php";
 
@@ -186,7 +148,6 @@ export default function App() {
   const overlayRef = useRef(null);
   const resultCanvasRef = useRef(null);
   const streamRef = useRef(null);
-  const [debugExportEnabled, setDebugExportEnabled] = useState(() => isDebugQueryEnabled());
   /** Fourier result animation: false when finished, true while coeffs are animating. */
   const [resultAnimPlaying, setResultAnimPlaying] = useState(false);
   /** Increment to restart the result animation with the same path. */
@@ -210,7 +171,7 @@ export default function App() {
   const [generatingFrameUrl, setGeneratingFrameUrl] = useState(null);
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
   const [previewSession, setPreviewSession] = useState(0);
-  const [savedGenerations, setSavedGenerations] = useState(() => loadGenerations());
+  const [savedGenerations] = useState(() => loadGenerations());
 
   const shareAbortRef = useRef(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -325,16 +286,9 @@ export default function App() {
 
     const path = await runOnSource(canvas);
     if (path) {
-      const item = addGeneration(path);
-      if (item) {
-        setSavedGenerations((prev) => [item, ...prev]);
-        setGeneratingFrameUrl(null);
-        setResultAnimPlaying(true);
-        setPhase("result");
-      } else {
-        setGeneratingFrameUrl(null);
-        void startCamera();
-      }
+      setGeneratingFrameUrl(null);
+      setResultAnimPlaying(true);
+      setPhase("result");
     } else {
       setGeneratingFrameUrl(null);
       void startCamera();
@@ -499,17 +453,6 @@ export default function App() {
     });
   }, [phase, resultPath, resultReplayKey, resultFixedM, onAnimM]);
 
-  useEffect(() => {
-    const onPopState = () => setDebugExportEnabled(isDebugQueryEnabled());
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  const downloadLocalStorageJson = useCallback(() => {
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    downloadJsonFile(`bioglyph-localstorage-${stamp}.json`, snapshotLocalStorageForExport());
-  }, []);
-
   const goToGeneratePage = useCallback(() => {
     setExtractError(null);
     if (phase === "preview") return;
@@ -526,19 +469,6 @@ export default function App() {
         <button type="button" className="app-brand app-brand--button" onClick={goToGeneratePage}>
           BioGlyph
         </button>
-        {debugExportEnabled ? (
-          <div className="app-top-bar-actions">
-            <button
-              type="button"
-              className="app-debug-download-btn"
-              aria-label="Download localStorage as JSON"
-              title="Download localStorage (debug)"
-              onClick={downloadLocalStorageJson}
-            >
-              <Download size={18} strokeWidth={2} aria-hidden />
-            </button>
-          </div>
-        ) : null}
       </div>
       <main className={`stage stage--${phase}`}>
         {phase === "idle" && (
