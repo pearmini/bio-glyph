@@ -79,6 +79,8 @@ export default function App() {
   const overlayRef = useRef(null);
   const resultCanvasRef = useRef(null);
   const streamRef = useRef(null);
+  /** Bumped when navigating home via BioGlyph so in-flight `generate` cannot commit. */
+  const generateEpochRef = useRef(0);
   /** Fourier result animation: false when finished, true while coeffs are animating. */
   const [resultAnimPlaying, setResultAnimPlaying] = useState(false);
   /** Increment to restart the result animation with the same path. */
@@ -198,6 +200,8 @@ export default function App() {
     canvas.height = vh;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const generateRunId = generateEpochRef.current;
+
     ctx.drawImage(video, 0, 0, vw, vh);
 
     let freezeUrl = null;
@@ -213,16 +217,25 @@ export default function App() {
 
     await delay(GENERATING_HOLD_MS);
 
+    if (generateRunId !== generateEpochRef.current) return;
+
     const path = await runOnSource(canvas);
+    if (generateRunId !== generateEpochRef.current) {
+      setResultPath(null);
+      setExtractError(null);
+      clearOverlay();
+      return;
+    }
     if (path) {
       setGeneratingFrameUrl(null);
       setResultAnimPlaying(true);
       setPhase("result");
     } else {
       setGeneratingFrameUrl(null);
+      if (generateRunId !== generateEpochRef.current) return;
       void startCamera();
     }
-  }, [runOnSource, stopStream, startCamera]);
+  }, [runOnSource, stopStream, startCamera, clearOverlay]);
 
   useEffect(() => {
     if (phase !== "preview") return;
@@ -334,20 +347,28 @@ export default function App() {
     });
   }, [phase, idleDemoPath]);
 
-  const goToGeneratePage = useCallback(() => {
+  const goToStart = useCallback(() => {
     setExtractError(null);
-    if (phase === "preview") return;
     if (phase === "idle") {
-      void startCamera();
+      setCameraError(null);
       return;
     }
-    void retake();
-  }, [phase, retake, startCamera]);
+    generateEpochRef.current += 1;
+    stopStream();
+    clearOverlay();
+    setGeneratingFrameUrl(null);
+    setResultPath(null);
+    setResultReplayKey(0);
+    setResultFixedM(null);
+    setResultDisplayM(RESULT_EPICYCLES);
+    setCameraError(null);
+    setPhase("idle");
+  }, [phase, stopStream, clearOverlay]);
 
   return (
     <div className="app-root">
       <div className="app-top-bar">
-        <button type="button" className="app-brand app-brand--button" onClick={goToGeneratePage}>
+        <button type="button" className="app-brand app-brand--button" onClick={goToStart}>
           BioGlyph
         </button>
         <a
