@@ -11,7 +11,7 @@
 
 .app-top-bar {
   position: absolute;
-  top: 1rem;
+  top: max(0.4rem, env(safe-area-inset-top, 0px));
   left: 1rem;
   right: 1rem;
   z-index: 2;
