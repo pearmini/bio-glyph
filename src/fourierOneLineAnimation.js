@@ -305,3 +305,67 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
   };
 }
 
+/**
+ * Fourier reconstruction as one or more open polylines in **image pixel space** (same frame as
+ * `oneLinePath`). With `seamGapFraction > 0`, breaks match the canvas animator (`moveTo` at the
+ * gap); with `0` / omitted, returns a single connected sample chain.
+ *
+ * @param {number[][]} oneLinePath
+ * @param {{
+ *   samples?: number,
+ *   epicycles?: number,
+ *   m?: number,
+ *   outSamples?: number,
+ *   seamGapFraction?: number,
+ *   autoSeam?: boolean,
+ * }} [opts]
+ * @returns {number[][][]}
+ */
+export function getFourierReconstructionContours(oneLinePath, opts = {}) {
+  const samples = clamp(opts.samples ?? 2048, 256, 8192);
+  const M = clamp(opts.epicycles ?? 300, 16, 800);
+  const m = clamp(Math.floor(opts.m ?? M), 0, M);
+  const q = clamp(opts.outSamples ?? 1500, 256, 4000);
+  const autoSeam = opts.autoSeam ?? true;
+  const seamGapFraction = clamp(opts.seamGapFraction ?? 0, 0, 0.5);
+
+  const P0 = resamplePathByArcLength(oneLinePath, samples);
+  if (P0.length < 4) return [];
+
+  const P = centeredComplexFromPoints(P0);
+  const b = bboxFromPoints(P0);
+  const cx = (b.minX + b.maxX) * 0.5;
+  const cy = (b.minY + b.maxY) * 0.5;
+
+  const K = kSequence(M);
+  const DFT = computeDFT(P, K);
+  const seamIdx = autoSeam ? findLargestWrapJumpIndex(P) : 0;
+  const phaseOffset = (-2 * Math.PI * seamIdx) / Math.max(1, P.length);
+
+  const useM = Math.min(m, DFT.length);
+  /** @type {number[][][]} */
+  const segments = [];
+  /** @type {number[][]} */
+  let current = [];
+
+  for (let ti = 0; ti < q; ti++) {
+    const u = ti / q;
+    const inGap =
+      seamGapFraction > 0 &&
+      (u < seamGapFraction * 0.5 || u > 1 - seamGapFraction * 0.5);
+    const a = (ti * 2 * Math.PI) / q + phaseOffset;
+    let p = [0, 0];
+    for (let i = 0; i < useM; i++) {
+      p = add(p, mul(DFT[i], expim(a * K[i])));
+    }
+    const pt = [cx + p[0], cy + p[1]];
+    if (ti === 0 || inGap) {
+      if (current.length >= 2) segments.push(current);
+      current = [pt];
+    } else {
+      current.push(pt);
+    }
+  }
+  if (current.length >= 2) segments.push(current);
+  return segments;
+}
