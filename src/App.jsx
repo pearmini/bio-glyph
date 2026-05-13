@@ -5,9 +5,12 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
-import { Play, X } from "lucide-react";
+import { Play } from "lucide-react";
 import { getFourierReconstructionContours, startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
-import { loadGenerations, pathSegmentsToBubbleSvg, pathToBubbleSvg } from "./generationStorage.js";
+import { loadGenerations, pathSegmentsToBubbleSvg } from "./generationStorage.js";
+import { triggerFileDownload } from "./fileDownload.js";
+import { GitHubMark } from "./GitHubMark.jsx";
+import { ArchiveModal } from "./ArchiveModal.jsx";
 
 const VIDEO_CONSTRAINTS = {
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -38,61 +41,6 @@ const FOURIER_SVG_EXPORT = {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** GitHub logo (Lucide does not ship a GitHub icon). */
-function GitHubMark() {
-  return (
-    <svg
-      className="app-github-icon"
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      aria-hidden
-    >
-      <path
-        fill="currentColor"
-        d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"
-      />
-    </svg>
-  );
-}
-
-/** @param {number[][]} path */
-function ArchiveFaceThumb({ path }) {
-  const { viewBox, d, strokeWidth } = pathToBubbleSvg(path, 128);
-  return (
-    <svg
-      className="archive-grid__thumb-svg"
-      viewBox={viewBox}
-      preserveAspectRatio="xMidYMid meet"
-      aria-hidden
-    >
-      {d ? (
-        <path
-          d={d}
-          fill="none"
-          stroke="#141414"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-    </svg>
-  );
-}
-
-/** @param {Blob} blob */
-function triggerFileDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
@@ -397,43 +345,6 @@ export default function App() {
     setPhase("idle");
   }, [phase, stopStream, clearOverlay]);
 
-  const openArchiveGeneration = useCallback(
-    (record) => {
-      if (!record?.path || record.path.length < 2) return;
-      generateEpochRef.current += 1;
-      stopStream();
-      clearOverlay();
-      setGeneratingFrameUrl(null);
-      setExtractError(null);
-      setCameraError(null);
-      setResultFixedM(null);
-      setResultPath(record.path);
-      setResultReplayKey((n) => n + 1);
-      setResultAnimPlaying(true);
-      setArchiveOpen(false);
-      setPhase("result");
-    },
-    [stopStream, clearOverlay],
-  );
-
-  useEffect(() => {
-    if (!archiveOpen) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") setArchiveOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [archiveOpen]);
-
-  useEffect(() => {
-    if (!archiveOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [archiveOpen]);
-
   return (
     <div className="app-root">
       <div className="app-top-bar">
@@ -461,62 +372,7 @@ export default function App() {
           </a>
         </div>
       </div>
-      {archiveOpen ? (
-        <div className="archive-modal-layer" role="presentation">
-          <button
-            type="button"
-            className="archive-modal-backdrop"
-            aria-label="Close archive"
-            onClick={() => setArchiveOpen(false)}
-          />
-          <div
-            className="archive-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="archive-modal-title"
-            aria-describedby="archive-modal-count"
-          >
-            <header className="archive-modal__header">
-              <div className="archive-modal__titles">
-                <h2 id="archive-modal-title" className="archive-modal__title">
-                  Participants in ITP Spring Show 2026
-                </h2>
-                <p id="archive-modal-count" className="archive-modal__subtitle">
-                  {archiveGridItems.length}{" "}
-                  {archiveGridItems.length === 1 ? "face" : "faces"}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="archive-modal__close"
-                onClick={() => setArchiveOpen(false)}
-                aria-label="Close"
-              >
-                <X size={22} strokeWidth={2} aria-hidden />
-              </button>
-            </header>
-            <div className="archive-modal__body">
-              {archiveGridItems.length === 0 ? (
-                <p className="archive-modal__empty">No saved faces in the archive yet.</p>
-              ) : (
-                <div className="archive-grid">
-                  {archiveGridItems.map((g) => (
-                    <button
-                      key={g.id}
-                      type="button"
-                      className="archive-grid__cell"
-                      onClick={() => openArchiveGeneration(g)}
-                      aria-label={`Open archive entry ${g.id}`}
-                    >
-                      <ArchiveFaceThumb path={g.path} />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ArchiveModal open={archiveOpen} onClose={() => setArchiveOpen(false)} items={archiveGridItems} />
       <main className={`stage stage--${phase}`}>
         {phase === "idle" && (
           <div className="stage__column">

@@ -422,6 +422,12 @@
   max-width: min(420px, 100%);
 }
 
+a.app-brand.app-brand--button {
+  text-decoration: none;
+  color: inherit;
+  display: inline-block;
+}
+
 .btn {
   font: inherit;
   padding: 0.5rem 1.1rem;
@@ -430,6 +436,13 @@
   background: #fff;
   cursor: pointer;
   color: #141414;
+}
+
+a.btn {
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .btn:hover {
@@ -652,6 +665,11 @@
   border-radius: 12px;
   background: #fafafa;
   cursor: pointer;
+}
+
+a.archive-grid__cell {
+  text-decoration: none;
+  color: inherit;
 }
 
 .archive-grid__cell:hover {
