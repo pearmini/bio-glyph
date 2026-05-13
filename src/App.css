@@ -362,6 +362,11 @@
   border-radius: 12px;
 }
 
+/* Idle landing: slightly smaller demo than full result viewport. */
+.circle-viewport--idle-demo {
+  width: min(68vmin, 380px);
+}
+
 .circle-viewport__result-canvas {
   position: absolute;
   inset: 0;

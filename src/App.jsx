@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   drawOneLinePathToCanvas,
   extractFaceFeaturesFromImage,
@@ -214,6 +214,12 @@ export default function App() {
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
   const [previewSession, setPreviewSession] = useState(0);
   const [savedGenerations] = useState(() => loadGenerations());
+  const idleDemoCanvasRef = useRef(null);
+
+  const idleDemoPath = useMemo(() => {
+    const rec = savedGenerations.find((g) => g.path && g.path.length >= 2);
+    return rec?.path ?? null;
+  }, [savedGenerations]);
 
   const stopStream = useCallback(() => {
     const s = streamRef.current;
@@ -436,6 +442,25 @@ export default function App() {
     });
   }, [phase, resultPath, resultReplayKey, resultFixedM, onAnimM]);
 
+  useEffect(() => {
+    if (phase !== "idle" || !idleDemoPath) return;
+    const canvas = idleDemoCanvasRef.current;
+    if (!canvas) return;
+
+    return startFourierOneLineAnimation(canvas, idleDemoPath, {
+      samples: 2048,
+      epicycles: RESULT_EPICYCLES,
+      outSamples: 1500,
+      fadeAlpha: 0.04,
+      strokeStyle: "#141414",
+      lineWidth: RESULT_LINE_CSS_PX,
+      coeffsPerSecond: 65,
+      loop: true,
+      autoSeam: true,
+      seamGapFraction: 0.02,
+    });
+  }, [phase, idleDemoPath]);
+
   const goToGeneratePage = useCallback(() => {
     setExtractError(null);
     if (phase === "preview") return;
@@ -464,16 +489,27 @@ export default function App() {
       </div>
       <main className={`stage stage--${phase}`}>
         {phase === "idle" && (
-          <button
-            type="button"
-            className="btn btn--dark"
-            onClick={() => {
-              setExtractError(null);
-              void startCamera();
-            }}
-          >
-            Start camera
-          </button>
+          <div className="stage__column">
+            {idleDemoPath ? (
+              <div className="circle-viewport circle-viewport--result circle-viewport--idle-demo">
+                <canvas
+                  ref={idleDemoCanvasRef}
+                  className="circle-viewport__result-canvas"
+                  aria-label="Example one-line face from the archive"
+                />
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn--dark"
+              onClick={() => {
+                setExtractError(null);
+                void startCamera();
+              }}
+            >
+              Start camera
+            </button>
+          </div>
         )}
 
         {phase === "preview" && (
