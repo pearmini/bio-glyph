@@ -507,7 +507,7 @@ export default function App() {
                 void startCamera();
               }}
             >
-              Start camera
+              Create
             </button>
           </div>
         )}
