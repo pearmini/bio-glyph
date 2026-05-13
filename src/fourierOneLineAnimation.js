@@ -14,6 +14,12 @@ function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
 }
 
+/** Ease-in on [0,1]: slow start, fast finish. exponent 1 is linear. */
+function easeInProgress(u, exponent) {
+  const e = Math.max(1, exponent);
+  return e === 1 ? u : Math.pow(u, e);
+}
+
 /** Matches app chrome (`index.css` / `.app-root`). */
 const CANVAS_BG = "#f6f6f6";
 
@@ -148,6 +154,8 @@ function findLargestWrapJumpIndex(pts) {
 
 /**
  * Progressive Fourier-series animation for a single closed-ish polyline.
+ * Term count `m` advances along an ease-in curve by default (`mEaseExponent` 2.35): slightly slow while `m` is low, then faster toward full `M`.
+ * Pass `mEaseExponent: 1` for the previous linear ramp. `coeffsPerSecond` still sets overall sweep duration (~`M / coeffsPerSecond` seconds per 0→M pass).
  * Call returns a cleanup function that stops animation.
  *
  * @param {HTMLCanvasElement} canvas
@@ -161,6 +169,7 @@ function findLargestWrapJumpIndex(pts) {
  *  strokeStyle?: string,
  *  lineWidth?: number,
  *  coeffsPerSecond?: number,
+ *  mEaseExponent?: number,
  *  loop?: boolean,
  *  closeStroke?: boolean,
  *  seamGapFraction?: number,
@@ -210,6 +219,7 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
   const strokeStyle = opts.strokeStyle ?? "#141414";
   const lineWidth = opts.lineWidth ?? 2.25;
   const coeffsPerSecond = clamp(opts.coeffsPerSecond ?? 90, 10, 800);
+  const mEaseExponent = clamp(opts.mEaseExponent ?? 2.35, 1, 6);
   const loop = opts.loop ?? false;
   const closeStroke = opts.closeStroke ?? false;
   const autoSeam = opts.autoSeam ?? true;
@@ -243,9 +253,17 @@ export function startFourierOneLineAnimation(canvas, oneLinePath, opts = {}) {
     if (m === null) {
       if (!startT) startT = tMs;
       const elapsed = (tMs - startT) / 1000;
-      m = Math.floor(elapsed * coeffsPerSecond);
-      if (loop) m = m % (M + 1);
-      else m = clamp(m, 0, M);
+      // One full 0→M sweep in M/coeffsPerSecond seconds; ease-in makes low m advance slowly then faster.
+      const sweepSec = M / coeffsPerSecond;
+      let u;
+      if (loop) {
+        const local = sweepSec > 0 ? elapsed % sweepSec : 0;
+        u = clamp(local / sweepSec, 0, 1);
+      } else {
+        u = clamp(elapsed / sweepSec, 0, 1);
+      }
+      const progress = easeInProgress(u, mEaseExponent);
+      m = Math.min(M, Math.floor(M * progress));
     }
 
     if (typeof opts.onM === "function") opts.onM(m);
