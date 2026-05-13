@@ -579,7 +579,7 @@ export default function App() {
               ) : null}
             </div>
             <button type="button" className="btn btn--dark btn--busy" disabled>
-              Generate
+              Generating...
             </button>
           </div>
         )}
