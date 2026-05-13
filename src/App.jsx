@@ -5,10 +5,9 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
-import { Play, X } from "lucide-react";
-import QRCode from "qrcode";
-import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
-import { loadGenerations, pathToBubbleSvg } from "./generationStorage.js";
+import { Play } from "lucide-react";
+import { getFourierReconstructionContours, startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
+import { loadGenerations, pathSegmentsToBubbleSvg, pathToBubbleSvg } from "./generationStorage.js";
 
 const VIDEO_CONSTRAINTS = {
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -21,8 +20,37 @@ const RESULT_EPICYCLES = 320;
 /** Extra time on the generating screen after capture before analysis runs. */
 const GENERATING_HOLD_MS = 1000;
 
+/** Raster result stroke in CSS px (`startFourierOneLineAnimation` default `lineWidth`). */
+const RESULT_LINE_CSS_PX = 2.25;
+/** Same as `fitToCanvasTransform(..., margin)` in `fourierOneLineAnimation.js`. */
+const RESULT_PATH_FIT = 0.88;
+/** Matches `.circle-viewport { width: min(80vmin, 480px) }` max — ties SVG stroke to on-screen PNG weight. */
+const RESULT_VIEWPORT_MAX_CSS = 480;
+const RESULT_EXPORT_SVG_SIZE = 1024;
+
+/** Shared with result canvas animator — SVG export uses full detail (320 terms). */
+const FOURIER_SVG_EXPORT = {
+  samples: 2048,
+  outSamples: 1500,
+  autoSeam: true,
+  seamGapFraction: 0.02,
+};
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** @param {Blob} blob */
+function triggerFileDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function hashString(s) {
@@ -112,9 +140,6 @@ function bubbleStackZById(generations) {
   return map;
 }
 
-const LITTERBOX_UPLOAD =
-  "https://litterbox.catbox.moe/resources/internals/api.php";
-
 /** Renders a saved glyph in a bubble from stored path only (no raster thumbnail). */
 function HistoryBubbleFace({ path }) {
   const { viewBox, d, strokeWidth } = pathToBubbleSvg(path);
@@ -140,7 +165,6 @@ function HistoryBubbleFace({ path }) {
 }
 
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
-/** @typedef {"idle" | "uploading" | "ready" | "error"} SharePhase */
 
 export default function App() {
   const videoRef = useRef(null);
@@ -172,14 +196,6 @@ export default function App() {
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
   const [previewSession, setPreviewSession] = useState(0);
   const [savedGenerations] = useState(() => loadGenerations());
-
-  const shareAbortRef = useRef(null);
-  const [shareOpen, setShareOpen] = useState(false);
-  /** @type {[SharePhase, React.Dispatch<React.SetStateAction<SharePhase>>]} */
-  const [sharePhase, setSharePhase] = useState("idle");
-  const [shareImageUrl, setShareImageUrl] = useState(null);
-  const [shareQrDataUrl, setShareQrDataUrl] = useState(null);
-  const [shareError, setShareError] = useState(null);
 
   const stopStream = useCallback(() => {
     const s = streamRef.current;
@@ -347,89 +363,38 @@ export default function App() {
     [stopStream],
   );
 
-  const closeShareModal = useCallback(() => {
-    shareAbortRef.current?.abort();
-    shareAbortRef.current = null;
-    setShareOpen(false);
-    setSharePhase("idle");
-    setShareImageUrl(null);
-    setShareQrDataUrl(null);
-    setShareError(null);
-  }, []);
-
-  const openShareModal = useCallback(() => {
+  const downloadResultPng = useCallback(() => {
     const canvas = resultCanvasRef.current;
     if (!canvas || canvas.width < 1 || canvas.height < 1) return;
-
-    shareAbortRef.current?.abort();
-    const ac = new AbortController();
-    shareAbortRef.current = ac;
-
-    setShareOpen(true);
-    setSharePhase("uploading");
-    setShareImageUrl(null);
-    setShareQrDataUrl(null);
-    setShareError(null);
-
-    try {
-      canvas.toBlob(
-        async (blob) => {
-          if (ac.signal.aborted) return;
-          if (!blob) {
-            setSharePhase("error");
-            setShareError("Could not read image.");
-            return;
-          }
-          try {
-            const fd = new FormData();
-            fd.append("reqtype", "fileupload");
-            fd.append("time", "1h");
-            fd.append("fileToUpload", blob, `bioglyph-${Date.now()}.png`);
-            const res = await fetch(LITTERBOX_UPLOAD, {
-              method: "POST",
-              body: fd,
-              signal: ac.signal,
-            });
-            if (!res.ok) {
-              throw new Error(`Upload failed (${res.status})`);
-            }
-            const text = (await res.text()).trim();
-            if (!text.startsWith("http")) {
-              throw new Error("Unexpected response from upload service.");
-            }
-            if (ac.signal.aborted) return;
-            setShareImageUrl(text);
-            const qr = await QRCode.toDataURL(text, {
-              width: 220,
-              margin: 2,
-              color: { dark: "#141414", light: "#ffffff" },
-            });
-            if (ac.signal.aborted) return;
-            setShareQrDataUrl(qr);
-            setSharePhase("ready");
-          } catch (e) {
-            if (ac.signal.aborted) return;
-            if (e instanceof DOMException && e.name === "AbortError") return;
-            setSharePhase("error");
-            setShareError(e instanceof Error ? e.message : "Download failed.");
-          }
-        },
-        "image/png",
-      );
-    } catch {
-      setSharePhase("error");
-      setShareError("Could not read image.");
-    }
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        triggerFileDownload(blob, `bioglyph-${Date.now()}.png`);
+      },
+      "image/png",
+    );
   }, []);
 
-  useEffect(() => {
-    if (!shareOpen) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") closeShareModal();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [shareOpen, closeShareModal]);
+  const downloadResultSvg = useCallback(() => {
+    if (!resultPath || resultPath.length < 2) return;
+    const contours = getFourierReconstructionContours(resultPath, {
+      ...FOURIER_SVG_EXPORT,
+      epicycles: RESULT_EPICYCLES,
+      m: RESULT_EPICYCLES,
+    });
+    const { viewBox, d } = pathSegmentsToBubbleSvg(contours, RESULT_EXPORT_SVG_SIZE);
+    if (!d) return;
+    const pad = 8;
+    const drawable = RESULT_EXPORT_SVG_SIZE - 2 * pad;
+    const strokeWidth = (RESULT_LINE_CSS_PX * drawable) / (RESULT_PATH_FIT * RESULT_VIEWPORT_MAX_CSS);
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${RESULT_EXPORT_SVG_SIZE}" height="${RESULT_EXPORT_SVG_SIZE}">
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <path fill="none" stroke="#141414" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" d="${d}"/>
+</svg>`;
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    triggerFileDownload(blob, `bioglyph-${Date.now()}.svg`);
+  }, [resultPath]);
 
   useEffect(() => {
     if (phase !== "result") return;
@@ -443,7 +408,7 @@ export default function App() {
       outSamples: 1500,
       fadeAlpha: 0.04,
       strokeStyle: "#141414",
-      lineWidth: 2.25,
+      lineWidth: RESULT_LINE_CSS_PX,
       coeffsPerSecond: 65,
       loop: false,
       autoSeam: true,
@@ -596,9 +561,12 @@ export default function App() {
                   </label>
                 </div>
               </div>
-              <div className="result-actions__row">
-                <button type="button" className="btn" onClick={openShareModal}>
-                  Download to your phone
+              <div className="result-actions__row result-actions__row--wrap">
+                <button type="button" className="btn" onClick={downloadResultPng}>
+                  Download PNG
+                </button>
+                <button type="button" className="btn" onClick={downloadResultSvg}>
+                  Download SVG
                 </button>
                 <button type="button" className="btn" onClick={() => void retake()}>
                   Back
@@ -617,70 +585,6 @@ export default function App() {
 
       <canvas ref={captureCanvasRef} className="offscreen-canvas" aria-hidden />
       <canvas ref={overlayRef} className="offscreen-canvas" aria-hidden />
-
-      {shareOpen ? (
-        <div
-          className="share-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="share-modal-title"
-        >
-          <button
-            type="button"
-            className="share-modal__backdrop"
-            aria-label="Close download dialog"
-            onClick={closeShareModal}
-          />
-          <div className="share-modal__panel">
-            <div className="share-modal__header">
-              <h2 id="share-modal-title" className="share-modal__title">
-                Download to your phone
-              </h2>
-              <button
-                type="button"
-                className="share-modal__close"
-                aria-label="Close"
-                onClick={closeShareModal}
-              >
-                <X size={20} strokeWidth={2} aria-hidden />
-              </button>
-            </div>
-            {sharePhase === "uploading" ? (
-              <p className="share-modal__status">Preparing link…</p>
-            ) : null}
-            {sharePhase === "error" ? (
-              <p className="share-modal__error" role="alert">
-                {shareError ?? "Something went wrong."}
-              </p>
-            ) : null}
-            {sharePhase === "ready" && shareQrDataUrl ? (
-              <div className="share-modal__body">
-                <img
-                  src={shareQrDataUrl}
-                  alt="QR code linking to this image"
-                  className="share-modal__qr"
-                  width={220}
-                  height={220}
-                />
-                <p className="share-modal__hint">
-                  Scan to open the image, then save it from your browser. Link expires in about one
-                  hour.
-                </p>
-                {shareImageUrl ? (
-                  <a
-                    href={shareImageUrl}
-                    className="share-modal__link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Open link
-                  </a>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
