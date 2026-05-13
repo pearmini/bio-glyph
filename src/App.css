@@ -404,16 +404,17 @@
 
 .stage__tip {
   margin: 0;
-  font-size: 1.2rem;
-  font-weight: 500;
-  line-height: 1.35;
-  color: #333;
-  text-align: center;
   max-width: 22rem;
-  padding: 0.65rem 1.1rem;
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
+  padding: 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: #3a3a3a;
+  text-align: center;
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 /* (Static result image removed; result uses a canvas animation.) */
