@@ -132,15 +132,15 @@ export default function App() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const idleDemoCanvasRef = useRef(null);
 
-  const idleDemoPath = useMemo(() => {
-    const rec = savedGenerations.find((g) => g.path && g.path.length >= 2);
-    return rec?.path ?? null;
-  }, [savedGenerations]);
-
   const archiveGridItems = useMemo(
     () => savedGenerations.filter((g) => g.path && g.path.length >= 2),
     [savedGenerations],
   );
+
+  const idleDemoPath = useMemo(() => {
+    const last = archiveGridItems[archiveGridItems.length - 1];
+    return last?.path ?? null;
+  }, [archiveGridItems]);
 
   const stopStream = useCallback(() => {
     const s = streamRef.current;
