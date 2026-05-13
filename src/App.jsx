@@ -5,7 +5,7 @@ import {
   syncOverlaySize,
 } from "./facePipeline.js";
 import "./App.css";
-import { Download, Maximize2, Play, X } from "lucide-react";
+import { Download, Play, X } from "lucide-react";
 import QRCode from "qrcode";
 import { startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
 import { addGeneration, loadGenerations, pathToBubbleSvg } from "./generationStorage.js";
@@ -112,10 +112,6 @@ function bubbleStackZById(generations) {
   return map;
 }
 
-function getActiveFullscreenElement() {
-  return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
-}
-
 function isDebugQueryEnabled() {
   try {
     return new URLSearchParams(window.location.search).get("debug") === "true";
@@ -185,13 +181,11 @@ function HistoryBubbleFace({ path }) {
 /** @typedef {"idle" | "uploading" | "ready" | "error"} SharePhase */
 
 export default function App() {
-  const appRootRef = useRef(null);
   const videoRef = useRef(null);
   const captureCanvasRef = useRef(null);
   const overlayRef = useRef(null);
   const resultCanvasRef = useRef(null);
   const streamRef = useRef(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [debugExportEnabled, setDebugExportEnabled] = useState(() => isDebugQueryEnabled());
   /** Fourier result animation: false when finished, true while coeffs are animating. */
   const [resultAnimPlaying, setResultAnimPlaying] = useState(false);
@@ -506,34 +500,9 @@ export default function App() {
   }, [phase, resultPath, resultReplayKey, resultFixedM, onAnimM]);
 
   useEffect(() => {
-    const sync = () => {
-      const fs = getActiveFullscreenElement();
-      setIsFullscreen(fs !== null && fs === appRootRef.current);
-    };
-    sync();
-    document.addEventListener("fullscreenchange", sync);
-    document.addEventListener("webkitfullscreenchange", sync);
-    return () => {
-      document.removeEventListener("fullscreenchange", sync);
-      document.removeEventListener("webkitfullscreenchange", sync);
-    };
-  }, []);
-
-  useEffect(() => {
     const onPopState = () => setDebugExportEnabled(isDebugQueryEnabled());
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  const enterFullscreen = useCallback(async () => {
-    const el = appRootRef.current;
-    if (!el) return;
-    try {
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    } catch {
-      /* blocked or unsupported */
-    }
   }, []);
 
   const downloadLocalStorageJson = useCallback(() => {
@@ -552,13 +521,13 @@ export default function App() {
   }, [phase, retake, startCamera]);
 
   return (
-    <div ref={appRootRef} className="app-root">
+    <div className="app-root">
       <div className="app-top-bar">
         <button type="button" className="app-brand app-brand--button" onClick={goToGeneratePage}>
           BioGlyph
         </button>
-        <div className="app-top-bar-actions">
-          {debugExportEnabled ? (
+        {debugExportEnabled ? (
+          <div className="app-top-bar-actions">
             <button
               type="button"
               className="app-debug-download-btn"
@@ -568,18 +537,8 @@ export default function App() {
             >
               <Download size={18} strokeWidth={2} aria-hidden />
             </button>
-          ) : null}
-          {!isFullscreen ? (
-            <button
-              type="button"
-              className="app-fullscreen-btn"
-              aria-label="Enter full screen"
-              onClick={() => void enterFullscreen()}
-            >
-              <Maximize2 size={18} strokeWidth={2} aria-hidden />
-            </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
       <main className={`stage stage--${phase}`}>
         {phase === "idle" && (
