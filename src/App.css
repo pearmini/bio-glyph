@@ -331,15 +331,6 @@
   flex-shrink: 0;
 }
 
-/* Lift camera / freeze frame above bubble field: ring + depth (not result canvas). */
-.circle-viewport:not(.circle-viewport--result) {
-  box-shadow:
-    0 0 0 4px rgba(255, 255, 255, 0.92),
-    0 2px 6px rgba(0, 0, 0, 0.08),
-    0 10px 28px rgba(0, 0, 0, 0.14),
-    0 24px 56px rgba(0, 0, 0, 0.12);
-}
-
 .circle-viewport__freeze {
   position: absolute;
   inset: 0;
@@ -406,7 +397,6 @@
   background: #fff;
   border: 1px solid #e5e5e5;
   border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 /* (Static result image removed; result uses a canvas animation.) */
@@ -482,27 +472,6 @@
 .btn--dark:hover:not(:disabled) {
   background: #2a2a2a;
   border-color: #2a2a2a;
-}
-
-/* Generate (and busy Generate) over bubble field: reads as a solid card vs white circles. */
-.stage--preview .btn--dark,
-.stage--generating .btn--dark {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.35),
-    0 3px 10px rgba(0, 0, 0, 0.12),
-    0 12px 32px rgba(0, 0, 0, 0.18);
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.2s ease;
-}
-
-.stage--preview .btn--dark:hover:not(:disabled),
-.stage--generating .btn--dark:hover:not(:disabled) {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.45),
-    0 4px 14px rgba(0, 0, 0, 0.14),
-    0 16px 40px rgba(0, 0, 0, 0.22);
 }
 
 .btn--dark:disabled,

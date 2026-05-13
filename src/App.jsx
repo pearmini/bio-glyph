@@ -7,7 +7,7 @@ import {
 import "./App.css";
 import { Play } from "lucide-react";
 import { getFourierReconstructionContours, startFourierOneLineAnimation } from "./fourierOneLineAnimation.js";
-import { loadGenerations, pathSegmentsToBubbleSvg, pathToBubbleSvg } from "./generationStorage.js";
+import { loadGenerations, pathSegmentsToBubbleSvg } from "./generationStorage.js";
 
 const VIDEO_CONSTRAINTS = {
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -69,117 +69,6 @@ function triggerFileDownload(blob, filename) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-function hashString(s) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function mulberry32(seed) {
-  return function next() {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/**
- * Layout: top and bottom bands with a flex spacer for the camera column. Bubble
- * positions are percentages within each band so large discs stay in the margins.
- */
-function bubbleLayoutForId(id) {
-  const rng = mulberry32(hashString(id));
-  const topBand = rng() < 0.5;
-  const cx = 8 + rng() * 84;
-  const cy = 18 + rng() * 64;
-  const sizePx = 100 + Math.floor(rng() * 92);
-
-  let d1x = -20 - rng() * 30;
-  let d1y = -14 - rng() * 24;
-  let d2x = 18 + rng() * 28;
-  let d2y = -12 - rng() * 22;
-  if (!topBand) {
-    d1x = -22 - rng() * 28;
-    d1y = 12 + rng() * 26;
-    d2x = 16 + rng() * 30;
-    d2y = 10 + rng() * 24;
-  }
-
-  const duration = 19 + rng() * 16;
-  const delay = -rng() * duration;
-  return {
-    topBand,
-    anchor: {
-      left: `${cx}%`,
-      top: `${cy}%`,
-    },
-    disc: {
-      width: sizePx,
-      height: sizePx,
-      "--bubble-d1x": `${d1x}px`,
-      "--bubble-d1y": `${d1y}px`,
-      "--bubble-d2x": `${d2x}px`,
-      "--bubble-d2y": `${d2y}px`,
-      animationDuration: `${duration}s`,
-      animationDelay: `${delay}s`,
-    },
-  };
-}
-
-/**
- * Map band-local anchor % to full bubble-field % (same vertical split as the old
- * two flex rows: top band uses the upper half, bottom band the lower half).
- */
-function bubbleFieldAnchorStyle(layout) {
-  const rawTop = layout.anchor.top;
-  const topPct = typeof rawTop === "string" ? parseFloat(rawTop) : Number(rawTop);
-  const safe = Number.isFinite(topPct) ? topPct : 0;
-  const top = layout.topBand ? `${safe * 0.5}%` : `${50 + safe * 0.5}%`;
-  return { left: layout.anchor.left, top };
-}
-
-/** Newer generations get a higher z-index so they paint above older bubbles. */
-function bubbleStackZById(generations) {
-  if (!generations.length) return new Map();
-  const sorted = [...generations].sort((a, b) => {
-    if (b.createdAt !== a.createdAt) return b.createdAt - a.createdAt;
-    return String(a.id).localeCompare(String(b.id));
-  });
-  const map = new Map();
-  for (let i = 0; i < sorted.length; i++) {
-    map.set(sorted[i].id, sorted.length - i);
-  }
-  return map;
-}
-
-/** Renders a saved glyph in a bubble from stored path only (no raster thumbnail). */
-function HistoryBubbleFace({ path }) {
-  const { viewBox, d, strokeWidth } = pathToBubbleSvg(path);
-  return (
-    <svg
-      className="history-bubble__svg"
-      viewBox={viewBox}
-      preserveAspectRatio="xMidYMid meet"
-      aria-hidden
-    >
-      {d ? (
-        <path
-          d={d}
-          fill="none"
-          stroke="#141414"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-    </svg>
-  );
 }
 
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
@@ -371,22 +260,6 @@ export default function App() {
     setResultReplayKey((n) => n + 1);
   }, [resultFixedM, resultDisplayM]);
 
-  const openSavedGeneration = useCallback(
-    (record) => {
-      if (!record?.path || record.path.length < 2) return;
-      stopStream();
-      setGeneratingFrameUrl(null);
-      setExtractError(null);
-      setCameraError(null);
-      setResultFixedM(null);
-      setResultPath(record.path);
-      setResultReplayKey((n) => n + 1);
-      setResultAnimPlaying(true);
-      setPhase("result");
-    },
-    [stopStream],
-  );
-
   const downloadResultPng = useCallback(() => {
     const canvas = resultCanvasRef.current;
     if (!canvas || canvas.width < 1 || canvas.height < 1) return;
@@ -517,39 +390,6 @@ export default function App() {
 
         {phase === "preview" && (
           <div className="preview-stage">
-            {savedGenerations.length > 0 ? (
-              <div className="bubble-field" aria-hidden>
-                {(() => {
-                  const stackZById = bubbleStackZById(savedGenerations);
-                  const rows = savedGenerations.map((g) => ({
-                    g,
-                    layout: bubbleLayoutForId(g.id),
-                    stackZ: stackZById.get(g.id) ?? 1,
-                  }));
-                  return (
-                    <div className="bubble-field__anchors">
-                      {rows.map(({ g, layout, stackZ }) => (
-                        <button
-                          key={g.id}
-                          type="button"
-                          className="history-bubble-anchor"
-                          style={{
-                            ...bubbleFieldAnchorStyle(layout),
-                            zIndex: stackZ,
-                          }}
-                          onClick={() => openSavedGeneration(g)}
-                          aria-label="Open saved generation"
-                        >
-                          <span className="history-bubble" style={layout.disc}>
-                            <HistoryBubbleFace path={g.path} />
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            ) : null}
             <div className="preview-stage__foreground">
               <div className="stage__column">
                 <div className="circle-viewport">
