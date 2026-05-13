@@ -375,6 +375,25 @@
   display: block;
 }
 
+.stage__tagline {
+  margin: 0;
+  max-width: 22rem;
+  padding: 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: #3a3a3a;
+  text-align: center;
+}
+
+@media (min-width: 48rem) {
+  .stage__tagline {
+    max-width: none;
+    white-space: nowrap;
+  }
+}
+
 .stage__tip {
   margin: 0;
   font-size: 1.2rem;

@@ -499,6 +499,9 @@ export default function App() {
                 />
               </div>
             ) : null}
+            <p className="stage__tagline">
+              Draw faces in one continuous line, your own bio signature.
+            </p>
             <button
               type="button"
               className="btn btn--dark"
@@ -507,7 +510,7 @@ export default function App() {
                 void startCamera();
               }}
             >
-              Create
+              Start
             </button>
           </div>
         )}
