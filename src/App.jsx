@@ -521,7 +521,7 @@ export default function App() {
         {phase === "idle" && (
           <div className="stage__column">
             {idleDemoPath ? (
-              <div className="circle-viewport circle-viewport--result circle-viewport--idle-demo">
+              <div className="circle-viewport circle-viewport--result">
                 <canvas
                   ref={idleDemoCanvasRef}
                   className="circle-viewport__result-canvas"
