@@ -325,13 +325,13 @@ export default function App() {
 
     const path = await runOnSource(canvas);
     if (path) {
-      try {
-        addGeneration(path);
-        setSavedGenerations(loadGenerations());
+      const item = addGeneration(path);
+      if (item) {
+        setSavedGenerations((prev) => [item, ...prev]);
         setGeneratingFrameUrl(null);
         setResultAnimPlaying(true);
         setPhase("result");
-      } catch {
+      } else {
         setGeneratingFrameUrl(null);
         void startCamera();
       }

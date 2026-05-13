@@ -1,4 +1,4 @@
-const STORAGE_KEY = "bioglyph-generations-v1";
+import bundledGenerations from "./data/itp-spring-show-2026.json";
 
 function bboxFromPoints(pts) {
   let minX = Infinity;
@@ -48,29 +48,35 @@ export function pathToBubbleSvg(path, size = 100) {
   };
 }
 
+/** @param {unknown[]} data */
+function normalizeGenerations(data) {
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter(
+      (x) =>
+        x &&
+        typeof x.id === "string" &&
+        Array.isArray(x.path) &&
+        x.path.length >= 2,
+    )
+    .map((x) => ({
+      id: x.id,
+      createdAt: typeof x.createdAt === "number" ? x.createdAt : 0,
+      path: x.path,
+    }));
+}
+
+function generationsFromBundled(raw) {
+  if (Array.isArray(raw)) return normalizeGenerations(raw);
+  if (raw && typeof raw === "object" && Array.isArray(raw["bioglyph-generations-v1"])) {
+    return normalizeGenerations(raw["bioglyph-generations-v1"]);
+  }
+  return [];
+}
+
 /** @returns {{ id: string, createdAt: number, path: number[][] }[]} */
 export function loadGenerations() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return [];
-    return data
-      .filter(
-        (x) =>
-          x &&
-          typeof x.id === "string" &&
-          Array.isArray(x.path) &&
-          x.path.length >= 2,
-      )
-      .map((x) => ({
-        id: x.id,
-        createdAt: typeof x.createdAt === "number" ? x.createdAt : 0,
-        path: x.path,
-      }));
-  } catch {
-    return [];
-  }
+  return generationsFromBundled(bundledGenerations);
 }
 
 /**
@@ -80,23 +86,9 @@ export function loadGenerations() {
 export function addGeneration(path) {
   if (!path || path.length < 2) return null;
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  const item = {
+  return {
     id,
     createdAt: Date.now(),
     path,
   };
-  let list = [item, ...loadGenerations()];
-  while (list.length > 0) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      return item;
-    } catch (e) {
-      const maybeQuota =
-        (e instanceof DOMException && e.name === "QuotaExceededError") ||
-        (typeof e?.message === "string" && /quota|storage is full/i.test(e.message));
-      if (!maybeQuota || list.length <= 1) return null;
-      list = list.slice(0, -1);
-    }
-  }
-  return null;
 }
