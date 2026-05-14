@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   drawOneLinePathToCanvas,
   extractFaceFeaturesFromImage,
@@ -10,7 +11,6 @@ import { getFourierReconstructionContours, startFourierOneLineAnimation } from "
 import { loadGenerations, pathSegmentsToBubbleSvg } from "./generationStorage.js";
 import { triggerFileDownload } from "./fileDownload.js";
 import { GitHubMark } from "./GitHubMark.jsx";
-import { ArchiveModal } from "./ArchiveModal.jsx";
 
 const VIDEO_CONSTRAINTS = {
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -77,7 +77,6 @@ export default function App() {
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
   const [previewSession, setPreviewSession] = useState(0);
   const [savedGenerations] = useState(() => loadGenerations());
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const idleDemoCanvasRef = useRef(null);
 
   const archiveGridItems = useMemo(
@@ -329,7 +328,6 @@ export default function App() {
     setExtractError(null);
     if (phase === "idle") {
       setCameraError(null);
-      setArchiveOpen(false);
       return;
     }
     generateEpochRef.current += 1;
@@ -341,7 +339,6 @@ export default function App() {
     setResultFixedM(null);
     setResultDisplayM(RESULT_EPICYCLES);
     setCameraError(null);
-    setArchiveOpen(false);
     setPhase("idle");
   }, [phase, stopStream, clearOverlay]);
 
@@ -352,15 +349,9 @@ export default function App() {
           BioGlyph
         </button>
         <div className="app-top-bar__end">
-          <button
-            type="button"
-            className="app-archive-btn"
-            onClick={() => setArchiveOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={archiveOpen}
-          >
+          <Link to="/archive" className="app-archive-btn">
             Archive
-          </button>
+          </Link>
           <a
             href="https://github.com/pearmini/bio-glyph"
             className="app-github-link"
@@ -372,7 +363,6 @@ export default function App() {
           </a>
         </div>
       </div>
-      <ArchiveModal open={archiveOpen} onClose={() => setArchiveOpen(false)} items={archiveGridItems} />
       <main className={`stage stage--${phase}`}>
         {phase === "idle" && (
           <div className="stage__column">
