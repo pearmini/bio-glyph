@@ -6,7 +6,6 @@ import { getFourierReconstructionContours, startFourierOneLineAnimation } from "
 import { loadGenerations, pathSegmentsToBubbleSvg } from "./generationStorage.js";
 import { triggerFileDownload } from "./fileDownload.js";
 import { GitHubMark } from "./GitHubMark.jsx";
-import { ArchiveModal } from "./ArchiveModal.jsx";
 
 const RESULT_EPICYCLES = 320;
 const RESULT_LINE_CSS_PX = 2.25;
@@ -40,7 +39,6 @@ export default function FacePage() {
     return null;
   }, [record]);
 
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const resultCanvasRef = useRef(null);
   const [resultAnimPlaying, setResultAnimPlaying] = useState(false);
   const [resultReplayKey, setResultReplayKey] = useState(0);
@@ -123,15 +121,9 @@ export default function FacePage() {
           BioGlyph
         </Link>
         <div className="app-top-bar__end">
-          <button
-            type="button"
-            className="app-archive-btn"
-            onClick={() => setArchiveOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={archiveOpen}
-          >
+          <Link to="/archive" className="app-archive-btn">
             Archive
-          </button>
+          </Link>
           <a
             href="https://github.com/pearmini/bio-glyph"
             className="app-github-link"
@@ -143,8 +135,6 @@ export default function FacePage() {
           </a>
         </div>
       </div>
-      <ArchiveModal open={archiveOpen} onClose={() => setArchiveOpen(false)} items={archiveGridItems} />
-
       {hasFace ? (
         <main className="stage stage--result">
           <div className="stage__column stage__column--result">
