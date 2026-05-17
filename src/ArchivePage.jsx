@@ -58,6 +58,13 @@ export default function ArchivePage() {
               </span>
             </span>
           </h1>
+          <button
+            type="button"
+            className="app-archive-btn archive-page__back"
+            onClick={() => navigate("/")}
+          >
+            Back
+          </button>
         </header>
         {items.length === 0 ? (
           <div className="archive-page__empty-wrap">

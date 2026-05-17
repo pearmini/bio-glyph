@@ -20,9 +20,6 @@ const VIDEO_CONSTRAINTS = {
 /** Max Fourier terms used in the result animation (must match `epicycles` passed to the animator). */
 const RESULT_EPICYCLES = 320;
 
-/** Extra time on the generating screen after capture before analysis runs. */
-const GENERATING_HOLD_MS = 1000;
-
 /** Raster result stroke in CSS px (`startFourierOneLineAnimation` default `lineWidth`). */
 const RESULT_LINE_CSS_PX = 2.25;
 /** Same as `fitToCanvasTransform(..., margin)` in `fourierOneLineAnimation.js`. */
@@ -38,10 +35,6 @@ const FOURIER_SVG_EXPORT = {
   autoSeam: true,
   seamGapFraction: 0.02,
 };
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
 
@@ -191,10 +184,6 @@ export default function App() {
     stopStream();
     setPhase("generating");
     setCameraError(null);
-
-    await delay(GENERATING_HOLD_MS);
-
-    if (generateRunId !== generateEpochRef.current) return;
 
     const path = await runOnSource(canvas);
     if (generateRunId !== generateEpochRef.current) {
