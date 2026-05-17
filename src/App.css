@@ -589,6 +589,11 @@ a.btn {
   flex-shrink: 0;
 }
 
+.archive-page__back {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .archive-page__title-line {
   display: flex;
   flex-direction: row;
