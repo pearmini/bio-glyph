@@ -374,6 +374,7 @@ a.app-archive-btn {
   height: 100%;
   object-fit: cover;
   display: block;
+  transform: scaleX(-1);
 }
 
 /* Fourier output: square with rounded corners (not a circle). */

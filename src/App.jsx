@@ -172,7 +172,10 @@ export default function App() {
     if (!ctx) return;
     const generateRunId = generateEpochRef.current;
 
-    ctx.drawImage(video, 0, 0, vw, vh);
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -vw, 0, vw, vh);
+    ctx.restore();
 
     let freezeUrl = null;
     try {
