@@ -23,7 +23,8 @@ Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spri
 2. **Extract** — MediaPipe detects facial landmarks; image segmentation pulls out hair, ears, and contours.
 3. **Connect** — Features are ordered to minimize line overlap and merged into one path.
 4. **Reveal** — A Fourier-series animation progressively reconstructs the drawing, inspired by [Mike Bostock's Fourier Series — Progressive](https://observablehq.com/@mbostock/fourier-series-progressive).
-5. **Keep** — Download PNG or SVG, replay the animation, or browse the [archive](https://bio.bairui.dev/archive) of 428 portraits from ITP Spring Show 2026.
+5. **Keep** — Download PNG or SVG, replay the animation, or press **Add to Archive** to share your portrait online.
+6. **Browse** — The [archive](https://bio.bairui.dev/archive) lists community faces first, then 428 portraits from ITP Spring Show 2026.
 
 Up to **four faces** can be detected at once — couples, friends, whole groups — each merged left to right into a shared one-line portrait.
 
@@ -63,7 +64,7 @@ Webcam / image
 
 **Animation** (`src/fourierOneLineAnimation.js`) — resamples the path, computes DFT coefficients, and animates progressive reconstruction with adjustable epicycle count.
 
-**Archive** (`/archive`, `/face/:id`) — bundled show data from `src/data/itp-spring-show-2026.json`; each portrait gets a shareable URL and downloadable assets.
+**Archive** (`/archive`, `/face/:id`) — community faces in Supabase (`faces` table) plus bundled show data from `src/data/itp-spring-show-2026.json`; each portrait gets a shareable URL and downloadable assets.
 
 A companion Jupyter notebook (`python/bio_glyph_face_pipeline.ipynb`) mirrors the extraction logic for offline experimentation.
 
@@ -74,9 +75,10 @@ A companion Jupyter notebook (`python/bio_glyph_face_pipeline.ipynb`) mirrors th
 | UI | React 19, React Router, Vite |
 | Vision | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker) — Face Landmarker + Selfie Multiclass Segmenter |
 | Animation | Custom Fourier-series renderer (Canvas 2D) |
+| Community archive | [Supabase](https://supabase.com/) — Postgres `faces` table, `@supabase/supabase-js` (shared `bairui-studio` project with [Name2Tree](https://tree.bairui.dev/)) |
 | Deploy | Vercel |
 
-All inference runs **in the browser** — no server-side face processing, no API keys.
+All face **processing** runs in the browser. Community archive uses the Supabase **anon** key (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
 
 ## Getting started
 
@@ -86,10 +88,16 @@ All inference runs **in the browser** — no server-side face processing, no API
 git clone https://github.com/pearmini/bio-glyph.git
 cd bio-glyph
 npm install
+cp .env.example .env.local   # optional: enable Add to Archive
 npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173). Allow camera access when prompted.
+
+### Supabase setup (community archive)
+
+1. Run [`supabase/faces.sql`](supabase/faces.sql) in the Supabase SQL Editor (`bairui-studio`).
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env.local` and on Vercel (project `bio-glyph`).
 
 ```bash
 npm run build    # production build
@@ -107,11 +115,14 @@ bio-glyph/
 │   ├── App.jsx                 # Main capture + generation flow
 │   ├── facePipeline.js         # MediaPipe extraction → one-line path
 │   ├── fourierOneLineAnimation.js
-│   ├── generationStorage.js    # Archive data + SVG helpers
-│   ├── ArchivePage.jsx         # ITP Spring Show gallery
+│   ├── generationStorage.js    # Bundled archive data + SVG helpers
+│   ├── lib/                    # Supabase client, faces API, validation
+│   ├── ArchivePage.jsx         # Community + ITP 2026 gallery
 │   ├── FacePage.jsx            # Individual portrait view
 │   └── data/
 │       └── itp-spring-show-2026.json
+├── supabase/
+│   └── faces.sql               # Schema + RLS for community faces
 ├── python/
 │   └── bio_glyph_face_pipeline.ipynb
 └── img/
@@ -123,7 +134,7 @@ bio-glyph/
 | Path | Description |
 |------|-------------|
 | `/` | Create a new one-line portrait |
-| `/archive` | Browse ITP Spring Show 2026 portraits |
+| `/archive` | Community archive (if any), then ITP Spring Show 2026 portraits |
 | `/face/:id` | View, replay, and download a saved portrait |
 
 ## Credits

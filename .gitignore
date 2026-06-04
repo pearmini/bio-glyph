@@ -15,3 +15,6 @@ env/
 node_modules/
 dist/
 .vite/
+*.local
+supabase/.temp/
+.vercel

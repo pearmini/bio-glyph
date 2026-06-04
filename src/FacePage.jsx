@@ -6,6 +6,7 @@ import { getFourierReconstructionContours, startFourierOneLineAnimation } from "
 import { loadGenerations, pathSegmentsToBubbleSvg } from "./generationStorage.js";
 import { triggerFileDownload } from "./fileDownload.js";
 import { GitHubMark } from "./GitHubMark.jsx";
+import { fetchCommunityFaceById, isSupabaseConfigured } from "./lib/facesApi.js";
 
 const RESULT_EPICYCLES = 320;
 const RESULT_LINE_CSS_PX = 2.25;
@@ -24,15 +25,46 @@ export default function FacePage() {
   const id = typeof idParam === "string" ? decodeURIComponent(idParam) : "";
 
   const [savedGenerations] = useState(() => loadGenerations());
+  const [communityRecord, setCommunityRecord] = useState(null);
+  const [communityLoadState, setCommunityLoadState] = useState("idle");
+
   const archiveGridItems = useMemo(
     () => savedGenerations.filter((g) => g.path && g.path.length >= 2),
     [savedGenerations],
   );
 
-  const record = useMemo(
+  const bundledRecord = useMemo(
     () => archiveGridItems.find((g) => g.id === id) ?? null,
     [archiveGridItems, id],
   );
+
+  useEffect(() => {
+    if (bundledRecord || !id || !isSupabaseConfigured()) {
+      setCommunityRecord(null);
+      setCommunityLoadState("idle");
+      return;
+    }
+    let cancelled = false;
+    setCommunityLoadState("loading");
+    fetchCommunityFaceById(id)
+      .then((face) => {
+        if (!cancelled) {
+          setCommunityRecord(face);
+          setCommunityLoadState("done");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCommunityRecord(null);
+          setCommunityLoadState("error");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, bundledRecord]);
+
+  const record = bundledRecord ?? communityRecord;
 
   const pathForCanvas = useMemo(() => {
     if (record?.path && record.path.length >= 2) return record.path;
@@ -112,7 +144,9 @@ export default function FacePage() {
     triggerFileDownload(blob, `bioglyph-${Date.now()}.svg`);
   }, [pathForCanvas]);
 
-  const hasFace = Boolean(record?.path && record.path.length >= 2);
+  const isLoading = !bundledRecord && communityLoadState === "loading";
+  const hasFace = Boolean(pathForCanvas);
+  const notFound = !bundledRecord && communityLoadState === "done" && !communityRecord;
 
   return (
     <div className="app-root">
@@ -135,7 +169,13 @@ export default function FacePage() {
           </a>
         </div>
       </div>
-      {hasFace ? (
+      {isLoading ? (
+        <main className="stage stage--idle">
+          <div className="stage__column">
+            <p className="stage__tagline">Loading face…</p>
+          </div>
+        </main>
+      ) : hasFace ? (
         <main className="stage stage--result">
           <div className="stage__column stage__column--result">
             <div className="circle-viewport circle-viewport--result">
@@ -194,7 +234,11 @@ export default function FacePage() {
         <main className="stage stage--idle">
           <div className="stage__column">
             <p className="stage__error" role="alert">
-              {id ? "This face is not in the archive." : "Missing face id."}
+              {notFound || communityLoadState === "error"
+                ? "This face is not in the archive."
+                : id
+                  ? "This face is not in the archive."
+                  : "Missing face id."}
             </p>
             <Link to="/" className="btn btn--dark">
               Back to home
