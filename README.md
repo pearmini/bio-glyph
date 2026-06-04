@@ -11,11 +11,13 @@ BioGlyph is an interactive web app that turns your face into a single continuous
 
 Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spring2026/), it was tried by **150+ people** who collectively archived **428 faces**. Friends gathered around the screen, watched their portraits emerge from nothing, and took home something uniquely theirs.
 
+**You are welcome here.** Open the [live app](https://bio.bairui.dev/), point your camera, and watch your one-line portrait appear. When you like it, press **Add to Archive** — your face joins the online gallery at the top of the [archive](https://bio.bairui.dev/archive), alongside the ITP Spring Show collection. Hover your portrait (marked with `*`) to delete it anytime.
+
 ![Selected one-line portraits from ITP Spring Show 2026](./img/examples.jpg)
 
 > *Simple things still matter.*
 
-[**Try it live →**](https://bio.bairui.dev/) · [**Read the story →**](https://medium.com/@subairui/my-last-itp-spring-show-bioglyph-simple-things-still-matter-c27ab28d218d)
+[**Try it live →**](https://bio.bairui.dev/) · [**Explore the archive →**](https://bio.bairui.dev/archive) · [**Read the story →**](https://medium.com/@subairui/my-last-itp-spring-show-bioglyph-simple-things-still-matter-c27ab28d218d)
 
 ## What it does
 
@@ -56,15 +58,18 @@ Webcam / image
       ▼
 ┌─────────────────────────────────────┐
 │  Fourier progressive reconstruction │  epicycle animation on canvas
-│  Export PNG / SVG                   │
+│  Export PNG / SVG · Add to Archive  │
 └─────────────────────────────────────┘
+      │
+      ├─ Community ──► Supabase `faces` (browser ID, delete own)
+      └─ Show archive ─► itp-spring-show-2026.json (428 portraits)
 ```
 
 **Face pipeline** (`src/facePipeline.js`) — landmark-based feature outlines, segmentation-backed hair and ear contours, Ramer–Douglas–Peucker simplification, and greedy path ordering so the stroke reads cleanly as one line.
 
 **Animation** (`src/fourierOneLineAnimation.js`) — resamples the path, computes DFT coefficients, and animates progressive reconstruction with adjustable epicycle count.
 
-**Archive** (`/archive`, `/face/:id`) — community faces in Supabase (`faces` table) plus bundled show data from `src/data/itp-spring-show-2026.json`; each portrait gets a shareable URL and downloadable assets.
+**Archive** (`/archive`, `/face/:id`) — **Community** portraits from Supabase (`faces` table, newest first), then **ITP Spring Show 2026** from bundled JSON; each entry has a shareable URL and downloadable assets.
 
 A companion Jupyter notebook (`python/bio_glyph_face_pipeline.ipynb`) mirrors the extraction logic for offline experimentation.
 
@@ -72,13 +77,15 @@ A companion Jupyter notebook (`python/bio_glyph_face_pipeline.ipynb`) mirrors th
 
 | Layer | Tools |
 |-------|-------|
-| UI | React 19, React Router, Vite |
-| Vision | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker) — Face Landmarker + Selfie Multiclass Segmenter |
+| UI | React 19, React Router 7, Vite 8, [Lucide](https://lucide.dev/) icons |
+| Vision | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker) — Face Landmarker + Selfie Multiclass Segmenter (CDN WASM) |
 | Animation | Custom Fourier-series renderer (Canvas 2D) |
-| Community archive | [Supabase](https://supabase.com/) — Postgres `faces` table, `@supabase/supabase-js` (shared `bairui-studio` project with [Name2Tree](https://tree.bairui.dev/)) |
-| Deploy | Vercel |
+| Community archive | [Supabase](https://supabase.com/) — Postgres `faces` table, `@supabase/supabase-js`, Row Level Security; shared [`bairui-studio`](https://supabase.com/) project with [Name2Tree](https://tree.bairui.dev/) (`trees` table) |
+| Deploy | Vercel (`bio-glyph`) |
 
-All face **processing** runs in the browser. Community archive uses the Supabase **anon** key (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+All face **processing** runs in the browser — no server-side vision, no API keys for MediaPipe.
+
+**Community archive** uses the Supabase **anon** publishable key in the client (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). A stable `bioglyph_browser_id` in `localStorage` ties each submission to your device so you can delete only your own portraits.
 
 ## Getting started
 
@@ -134,7 +141,7 @@ bio-glyph/
 | Path | Description |
 |------|-------------|
 | `/` | Create a new one-line portrait |
-| `/archive` | Community archive (if any), then ITP Spring Show 2026 portraits |
+| `/archive` | **Community** (Supabase, if any), then **ITP Spring Show 2026** (bundled) |
 | `/face/:id` | View, replay, and download a saved portrait |
 
 ## Credits
