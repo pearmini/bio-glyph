@@ -11,6 +11,8 @@ BioGlyph is an interactive web app that turns your face into a single continuous
 
 Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spring2026/), it was tried by **150+ people** who collectively archived **428 faces**. Friends gathered around the screen, watched their portraits emerge from nothing, and took home something uniquely theirs.
 
+![Selected one-line portraits from ITP Spring Show 2026](./img/examples.jpg)
+
 > *Simple things still matter.*
 
 [**Try it live →**](https://bio.bairui.dev/) · [**Read the story →**](https://bairui.dev/)
