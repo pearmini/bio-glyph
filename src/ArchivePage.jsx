@@ -142,14 +142,11 @@ export default function ArchivePage() {
         <header className="archive-page__head">
           <button
             type="button"
-            className="app-brand app-brand--button archive-page__brand"
+            className="archive-page__site-title"
             onClick={() => navigate("/")}
           >
-            BioGlyph
+            BioGlyph Archive
           </button>
-          <h1 className="archive-page__title-line">
-            <span className="archive-page__event">Archive</span>
-          </h1>
           <button
             type="button"
             className="app-archive-btn archive-page__back"
@@ -159,19 +156,20 @@ export default function ArchivePage() {
           </button>
         </header>
 
-        {loadState === "loading" && (
-          <p className="archive-status">Loading community archive…</p>
-        )}
-        {loadState === "error" && (
-          <p className="archive-status archive-status--error">{loadError}</p>
-        )}
+        <div className="archive-page__body">
+          {loadState === "loading" && (
+            <p className="archive-status">Loading community faces…</p>
+          )}
+          {loadState === "error" && (
+            <p className="archive-status archive-status--error">{loadError}</p>
+          )}
 
-        {communityFaces.length > 0 && (
-          <ArchiveSection
-            title="Community Archive"
-            description="Faces added online after the show. Create one on the home page and press Add to Archive. Hover your face (marked with *) to delete it."
-            count={communityFaces.length}
-          >
+          {communityFaces.length > 0 && (
+            <ArchiveSection
+              title="Community"
+              description="Faces added online after the show. Create one on the home page and press Add to Archive. Hover your face (marked with *) to delete it."
+              count={communityFaces.length}
+            >
             {communityFaces.map((entry) => (
               <ArchiveGridCell
                 key={entry.id}
@@ -182,19 +180,20 @@ export default function ArchivePage() {
           </ArchiveSection>
         )}
 
-        <ArchiveSection
-          title="ITP Spring Show 2026"
-          description="One-line portraits from Find Trees in Names at NYU ITP — captured at the installation."
-          count={bundledItems.length}
-        >
-          {bundledItems.length === 0 ? (
-            <p className="archive-page__empty">No show portraits in the bundled archive.</p>
-          ) : (
-            bundledItems.map((entry) => (
-              <ArchiveGridCell key={entry.id} entry={entry} />
-            ))
-          )}
-        </ArchiveSection>
+          <ArchiveSection
+            title="ITP Spring Show 2026"
+            description="One-line portraits created with BioGlyph at NYU ITP — captured at the installation."
+            count={bundledItems.length}
+          >
+            {bundledItems.length === 0 ? (
+              <p className="archive-page__empty">No show portraits in the bundled archive.</p>
+            ) : (
+              bundledItems.map((entry) => (
+                <ArchiveGridCell key={entry.id} entry={entry} />
+              ))
+            )}
+          </ArchiveSection>
+        </div>
       </main>
     </div>
   );
