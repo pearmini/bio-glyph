@@ -27,7 +27,7 @@ Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spri
 
 Up to **four faces** can be detected at once — couples, friends, whole groups — each merged left to right into a shared one-line portrait.
 
-![Four people creating their one-line portraits together at ITP Spring Show 2026](./img/demo-four-faces.jpg)
+![Four people creating their one-line portraits together at ITP Spring Show 2026](./img/demo-four-faces.gif)
 
 ## Why it exists
 
