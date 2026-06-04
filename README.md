@@ -15,8 +15,6 @@ Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spri
 
 [**Try it live →**](https://bio.bairui.dev/) · [**Read the story →**](https://bairui.dev/)
 
----
-
 ## What it does
 
 1. **Capture** — Point your webcam at the screen.
@@ -27,15 +25,11 @@ Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spri
 
 Up to **four faces** can be detected at once — couples, friends, whole groups — each merged left to right into a shared one-line portrait.
 
----
-
 ## Why it exists
 
 BioGlyph explores facial features as a form of personal signature and identity through generative art. It asks a quiet question: after abstraction and sketching, what still makes a face *yours*?
 
 The project grew out of earlier experiments — a Progressive Self Portrait using Fourier series, abandoned ideas around name-to-face procedural generation, and a digital penPal that never quite clicked. What worked was the simplest thing: point a camera, watch a line appear, feel something.
-
----
 
 ## How it works
 
@@ -69,8 +63,6 @@ Webcam / image
 
 A companion Jupyter notebook (`python/bio_glyph_face_pipeline.ipynb`) mirrors the extraction logic for offline experimentation.
 
----
-
 ## Tech stack
 
 | Layer | Tools |
@@ -81,8 +73,6 @@ A companion Jupyter notebook (`python/bio_glyph_face_pipeline.ipynb`) mirrors th
 | Deploy | Vercel |
 
 All inference runs **in the browser** — no server-side face processing, no API keys.
-
----
 
 ## Getting started
 
@@ -105,8 +95,6 @@ npm run lint     # ESLint
 
 MediaPipe WASM and model files load from CDN on first use; a short delay on the first generation is normal.
 
----
-
 ## Project structure
 
 ```
@@ -126,8 +114,6 @@ bio-glyph/
     └── face.png
 ```
 
----
-
 ## Routes
 
 | Path | Description |
@@ -135,8 +121,6 @@ bio-glyph/
 | `/` | Create a new one-line portrait |
 | `/archive` | Browse ITP Spring Show 2026 portraits |
 | `/face/:id` | View, replay, and download a saved portrait |
-
----
 
 ## Credits
 
@@ -151,13 +135,9 @@ bio-glyph/
 - *"Can multiple people try it together?"* — added after day one; up to four faces merge into one path
 - *"It's nice to see face-detection used to create something, not just apply filters."* — exactly the point
 
----
-
 ## License
 
 [MIT](./LICENSE) © 2026 Bairui Su
-
----
 
 <p align="center">
   <a href="https://bio.bairui.dev/"><strong>bio.bairui.dev</strong></a>
