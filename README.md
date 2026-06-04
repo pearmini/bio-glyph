@@ -5,7 +5,7 @@
 [![Live demo](https://img.shields.io/badge/demo-bio.bairui.dev-141414?style=for-the-badge)](https://bio.bairui.dev/)
 [![ITP Spring Show 2026](https://img.shields.io/badge/ITP-Spring%20Show%202026-f6f6f6?style=for-the-badge&color=141414)](https://itp.nyu.edu/shows/spring2026/)
 
-![BioGlyph one-line portrait](./img/face.gif)
+<img src="./img/face.gif" width="480" alt="BioGlyph one-line portrait" />
 
 BioGlyph is an interactive web app that turns your face into a single continuous line — a personal signature drawn from your own features, not a filter.
 
