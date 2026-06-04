@@ -27,6 +27,8 @@ Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spri
 
 Up to **four faces** can be detected at once — couples, friends, whole groups — each merged left to right into a shared one-line portrait.
 
+![Four people creating their one-line portraits together at ITP Spring Show 2026](./img/demo-four-faces.jpg)
+
 ## Why it exists
 
 BioGlyph explores facial features as a form of personal signature and identity through generative art. It asks a quiet question: after abstraction and sketching, what still makes a face *yours*?
