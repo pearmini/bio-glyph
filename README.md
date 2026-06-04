@@ -5,11 +5,13 @@
 [![Live demo](https://img.shields.io/badge/demo-bio.bairui.dev-141414?style=for-the-badge)](https://bio.bairui.dev/)
 [![ITP Spring Show 2026](https://img.shields.io/badge/ITP-Spring%20Show%202026-f6f6f6?style=for-the-badge&color=141414)](https://itp.nyu.edu/shows/spring2026/)
 
-![BioGlyph one-line portrait](./img/face.png)
+<img src="./img/face.gif" width="480" alt="BioGlyph one-line portrait" />
 
 BioGlyph is an interactive web app that turns your face into a single continuous line — a personal signature drawn from your own features, not a filter.
 
 Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spring2026/), it was tried by **150+ people** who collectively archived **428 faces**. Friends gathered around the screen, watched their portraits emerge from nothing, and took home something uniquely theirs.
+
+![Selected one-line portraits from ITP Spring Show 2026](./img/examples.jpg)
 
 > *Simple things still matter.*
 
@@ -24,6 +26,8 @@ Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spri
 5. **Keep** — Download PNG or SVG, replay the animation, or browse the [archive](https://bio.bairui.dev/archive) of 428 portraits from ITP Spring Show 2026.
 
 Up to **four faces** can be detected at once — couples, friends, whole groups — each merged left to right into a shared one-line portrait.
+
+![Four people creating their one-line portraits together at ITP Spring Show 2026](./img/demo-four-faces.gif)
 
 ## Why it exists
 
