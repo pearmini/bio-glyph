@@ -15,7 +15,7 @@ Built in six hours for the [ITP Spring Show 2026](https://itp.nyu.edu/shows/spri
 
 > *Simple things still matter.*
 
-[**Try it live →**](https://bio.bairui.dev/) · [**Read the story →**](https://bairui.dev/)
+[**Try it live →**](https://bio.bairui.dev/) · [**Read the story →**](https://medium.com/@subairui/my-last-itp-spring-show-bioglyph-simple-things-still-matter-c27ab28d218d)
 
 ## What it does
 
