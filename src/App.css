@@ -558,6 +558,8 @@ a.btn {
 
 /* Archive page (/archive) — full-width grid */
 .archive-page {
+  --archive-pad-inline: max(1.5rem, env(safe-area-inset-left, 0px));
+  --archive-pad-inline-end: max(1.5rem, env(safe-area-inset-right, 0px));
   position: relative;
   flex: 1;
   min-height: 0;
@@ -567,11 +569,10 @@ a.btn {
   max-width: none;
   margin: 0;
   box-sizing: border-box;
-  /* Bar top (.app-top-bar) + small nudge; vertical pairing with taller row uses .archive-page__head min-height. */
-  padding-top: calc(max(0.4rem, env(safe-area-inset-top, 0px)) + 0.2rem);
-  padding-right: max(1rem, env(safe-area-inset-right, 0px));
-  padding-bottom: 2rem;
-  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-top: max(0.4rem, env(safe-area-inset-top, 0px));
+  padding-right: 0;
+  padding-bottom: 0;
+  padding-left: 0;
 }
 
 .archive-page__head {
@@ -579,20 +580,41 @@ a.btn {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 0.65rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
   min-width: 0;
-  /* Same cross-axis size driver as .app-top-bar (GitHub control min-height: 2.25rem). */
   min-height: 2.25rem;
+  padding: 0.65rem var(--archive-pad-inline-end) 1rem var(--archive-pad-inline);
+  margin: 0;
+  border-bottom: 1px solid #ddd;
 }
 
-.archive-page__brand {
-  flex-shrink: 0;
+.archive-page__site-title {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  color: #141414;
+  cursor: pointer;
+  text-align: left;
+}
+
+.archive-page__site-title:hover {
+  text-decoration: underline;
 }
 
 .archive-page__back {
   flex-shrink: 0;
   margin-left: auto;
+}
+
+.archive-page__body {
+  padding: 1.25rem var(--archive-pad-inline-end) 2rem var(--archive-pad-inline);
+  box-sizing: border-box;
 }
 
 .archive-page__title-line {
@@ -699,4 +721,115 @@ a.archive-grid__cell {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+.archive-status {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.archive-status--error {
+  color: #a33;
+}
+
+.archive-section {
+  margin-bottom: 2.5rem;
+}
+
+.archive-section:last-child {
+  margin-bottom: 0;
+}
+
+.archive-section__header {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.archive-section__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #141414;
+}
+
+.archive-section__description {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #555;
+  max-width: 40rem;
+}
+
+.archive-section__count {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #141414;
+}
+
+.archive-cell {
+  position: relative;
+}
+
+.archive-own-control {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  pointer-events: none;
+  transition: width 0.15s ease, height 0.15s ease, background 0.15s ease;
+}
+
+.archive-own-mark {
+  display: block;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: bold;
+  color: #141414;
+}
+
+.archive-own-delete {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #141414;
+}
+
+.archive-cell:hover .archive-own-control {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #141414;
+  border-radius: 8px;
+  background: #fafafa;
+  pointer-events: auto;
+}
+
+.archive-cell:hover .archive-own-mark {
+  display: none;
+}
+
+.archive-cell:hover .archive-own-delete {
+  display: flex;
+}
+
+.archive-own-control:active {
+  background: #141414;
+  color: #fafafa;
+}
+
+.archive-own-control:active .archive-own-delete {
+  color: #fafafa;
 }

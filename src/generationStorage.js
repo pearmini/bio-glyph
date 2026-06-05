@@ -122,6 +122,7 @@ function normalizeGenerations(data) {
       id: x.id,
       createdAt: typeof x.createdAt === "number" ? x.createdAt : 0,
       path: x.path,
+      source: "bundled",
     }));
 }
 

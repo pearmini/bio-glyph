@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   drawOneLinePathToCanvas,
   extractFaceFeaturesFromImage,
@@ -11,6 +11,8 @@ import { getFourierReconstructionContours, startFourierOneLineAnimation } from "
 import { loadGenerations, pathSegmentsToBubbleSvg } from "./generationStorage.js";
 import { triggerFileDownload } from "./fileDownload.js";
 import { GitHubMark } from "./GitHubMark.jsx";
+import { addCommunityFace, isSupabaseConfigured } from "./lib/facesApi.js";
+import { validatePath } from "./lib/validatePath.js";
 
 const VIDEO_CONSTRAINTS = {
   video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -39,6 +41,7 @@ const FOURIER_SVG_EXPORT = {
 /** @typedef {"idle" | "preview" | "generating" | "result"} AppPhase */
 
 export default function App() {
+  const navigate = useNavigate();
   const videoRef = useRef(null);
   const captureCanvasRef = useRef(null);
   const overlayRef = useRef(null);
@@ -70,6 +73,8 @@ export default function App() {
   /** Bumps when a new MediaStream is attached so the preview effect re-runs after async getUserMedia. */
   const [previewSession, setPreviewSession] = useState(0);
   const [savedGenerations] = useState(() => loadGenerations());
+  const [isAddingToArchive, setIsAddingToArchive] = useState(false);
+  const [archiveError, setArchiveError] = useState("");
   const idleDemoCanvasRef = useRef(null);
 
   const archiveGridItems = useMemo(
@@ -145,6 +150,7 @@ export default function App() {
     setResultFixedM(null);
     setResultDisplayM(RESULT_EPICYCLES);
     setExtractError(null);
+    setArchiveError("");
     setCameraError(null);
     setPhase("preview");
     try {
@@ -254,6 +260,28 @@ export default function App() {
     );
   }, []);
 
+  const addToArchive = useCallback(async () => {
+    if (!resultPath) return;
+    setArchiveError("");
+    const validation = validatePath(resultPath);
+    if (!validation.ok) {
+      setArchiveError(validation.error);
+      return;
+    }
+    if (!isSupabaseConfigured()) {
+      setArchiveError("Archive is not connected yet. Please try again later.");
+      return;
+    }
+    setIsAddingToArchive(true);
+    try {
+      await addCommunityFace(validation.path);
+      navigate("/archive");
+    } catch (err) {
+      setArchiveError(err.message ?? "Could not add to archive. Please try again.");
+      setIsAddingToArchive(false);
+    }
+  }, [resultPath, navigate]);
+
   const downloadResultSvg = useCallback(() => {
     if (!resultPath || resultPath.length < 2) return;
     const contours = getFourierReconstructionContours(resultPath, {
@@ -318,6 +346,7 @@ export default function App() {
 
   const goToStart = useCallback(() => {
     setExtractError(null);
+    setArchiveError("");
     if (phase === "idle") {
       setCameraError(null);
       return;
@@ -463,6 +492,15 @@ export default function App() {
                 </div>
               </div>
               <div className="result-actions__row result-actions__row--wrap">
+                <button
+                  type="button"
+                  className="btn btn--dark"
+                  disabled={isAddingToArchive}
+                  aria-busy={isAddingToArchive}
+                  onClick={() => void addToArchive()}
+                >
+                  Add to Archive
+                </button>
                 <button type="button" className="btn" onClick={downloadResultPng}>
                   Download PNG
                 </button>
@@ -477,9 +515,9 @@ export default function App() {
           </div>
         )}
 
-        {(cameraError || extractError) && (
+        {(cameraError || extractError || archiveError) && (
           <p className="stage__error" role="alert">
-            {cameraError || extractError}
+            {cameraError || extractError || archiveError}
           </p>
         )}
       </main>
