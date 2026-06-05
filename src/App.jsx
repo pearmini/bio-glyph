@@ -434,9 +434,19 @@ export default function App() {
                   />
                 </div>
                 <p className="stage__tip">Place your face or faces in the circle</p>
-                <button type="button" className="btn btn--dark" onClick={() => void generate()}>
-                  Generate
-                </button>
+                <span className="btn-hint">
+                  <button
+                    type="button"
+                    className="btn btn--dark"
+                    aria-describedby="generate-hint"
+                    onClick={() => void generate()}
+                  >
+                    Generate
+                  </button>
+                  <span id="generate-hint" className="btn-hint__tooltip" role="tooltip">
+                    Your camera image is processed in your browser and is not stored.
+                  </span>
+                </span>
               </div>
             </div>
           </div>
