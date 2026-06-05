@@ -159,6 +159,14 @@ export default function FacePage() {
             Archive
           </Link>
           <a
+            href="https://medium.com/@subairui/my-last-itp-spring-show-bioglyph-simple-things-still-matter-c27ab28d218d"
+            className="app-archive-btn"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Story
+          </a>
+          <a
             href="https://github.com/pearmini/bio-glyph"
             className="app-github-link"
             target="_blank"
