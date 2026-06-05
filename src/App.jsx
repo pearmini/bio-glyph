@@ -492,15 +492,22 @@ export default function App() {
                 </div>
               </div>
               <div className="result-actions__row result-actions__row--wrap">
-                <button
-                  type="button"
-                  className="btn btn--dark"
-                  disabled={isAddingToArchive}
-                  aria-busy={isAddingToArchive}
-                  onClick={() => void addToArchive()}
-                >
-                  Add to Archive
-                </button>
+                <span className="btn-hint">
+                  <button
+                    type="button"
+                    className="btn btn--dark"
+                    disabled={isAddingToArchive}
+                    aria-busy={isAddingToArchive}
+                    aria-describedby="archive-add-hint"
+                    onClick={() => void addToArchive()}
+                  >
+                    Add to Archive
+                  </button>
+                  <span id="archive-add-hint" className="btn-hint__tooltip" role="tooltip">
+                    Only the output image will be stored; the original face will not be stored. You can
+                    delete it anytime.
+                  </span>
+                </span>
                 <button type="button" className="btn" onClick={downloadResultPng}>
                   Download PNG
                 </button>

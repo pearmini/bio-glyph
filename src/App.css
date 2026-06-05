@@ -274,6 +274,40 @@ a.app-archive-btn {
   flex-wrap: wrap;
 }
 
+.btn-hint {
+  position: relative;
+  display: inline-flex;
+}
+
+.btn-hint__tooltip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 17rem;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: center;
+  color: #141414;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 10;
+}
+
+.btn-hint:hover .btn-hint__tooltip,
+.btn-hint:focus-within .btn-hint__tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
 .result-controls {
   display: inline-flex;
   align-items: center;
